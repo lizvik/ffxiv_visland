@@ -18,6 +18,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<EmbeddedResource Include="Localization\*.json" LogicalName="visland.Localization.%(Filename)%(Extension)" />
 		<EmbeddedResource Include="Workshop\Data\workshop-seasons.json" LogicalName="visland.Workshop.Data.workshop-seasons.json" />
 	</ItemGroup>
 </Project>

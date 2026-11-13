@@ -1,4 +1,4 @@
-﻿using Dalamud.Interface.Utility.Raii;
+using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Dalamud.Bindings.ImGui;
@@ -14,7 +14,7 @@ unsafe class ExportWindow : UIAttachedWindow {
     private readonly ExportDebug _debug = new();
     private readonly Throttle _exportThrottle = new(); // export seems to close & reopen window?..
 
-    public ExportWindow() : base("Exports Automation", "MJIDisposeShop", new(400, 600)) {
+    public ExportWindow() : base(L.Label("Exports Automation"), "MJIDisposeShop", new(400, 600)) {
         _config = Service.Config.Get<ExportConfig>();
     }
 
@@ -31,32 +31,33 @@ unsafe class ExportWindow : UIAttachedWindow {
     }
 
     public override void Draw() {
+        WindowName = L.Label("Exports Automation");
         using var tabs = ImRaii.TabBar("Tabs");
         if (tabs) {
-            using (var tab = ImRaii.TabItem("Main"))
+            using (var tab = ImRaii.TabItem(L.Label("Main")))
                 if (tab)
                     DrawMain();
-            using (var tab = ImRaii.TabItem("Debug"))
+            using (var tab = ImRaii.TabItem(L.Label("Debug")))
                 if (tab)
                     _debug.Draw();
         }
     }
 
     private void DrawMain() {
-        if (ImGui.Checkbox("Auto Export", ref _config.AutoSell))
+        if (ImGui.Checkbox(L.Label("Auto Export"), ref _config.AutoSell))
             _config.NotifyModified();
         ImGui.PushItemWidth(150);
-        if (ImGui.SliderInt("Sell normal above", ref _config.NormalLimit, 0, 999))
+        if (ImGui.SliderInt(L.Label("Sell normal above"), ref _config.NormalLimit, 0, 999))
             _config.NotifyModified();
-        if (ImGui.SliderInt("Sell granary above", ref _config.GranaryLimit, 0, 999))
+        if (ImGui.SliderInt(L.Label("Sell granary above"), ref _config.GranaryLimit, 0, 999))
             _config.NotifyModified();
-        if (ImGui.SliderInt("Sell farm above", ref _config.FarmLimit, 0, 999))
+        if (ImGui.SliderInt(L.Label("Sell farm above"), ref _config.FarmLimit, 0, 999))
             _config.NotifyModified();
-        if (ImGui.SliderInt("Sell pasture above", ref _config.PastureLimit, 0, 999))
+        if (ImGui.SliderInt(L.Label("Sell pasture above"), ref _config.PastureLimit, 0, 999))
             _config.NotifyModified();
         ImGui.PopItemWidth();
 
-        if (ImGui.Button("Sell everything above configured limits"))
+        if (ImGui.Button(L.Label("Sell everything above configured limits")))
             AutoExport();
     }
 

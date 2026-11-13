@@ -1,4 +1,4 @@
-﻿using Dalamud.Interface.Utility.Raii;
+using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.Game.MJI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Dalamud.Bindings.ImGui;
@@ -11,7 +11,7 @@ public unsafe class FarmWindow : UIAttachedWindow {
     private readonly FarmConfig _config;
     private readonly FarmDebug _debug = new();
 
-    public FarmWindow() : base("Farm Automation", "MJIFarmManagement", new(400, 600)) {
+    public FarmWindow() : base(L.Label("Farm Automation"), "MJIFarmManagement", new(400, 600)) {
         _config = Service.Config.Get<FarmConfig>();
     }
 
@@ -25,26 +25,27 @@ public unsafe class FarmWindow : UIAttachedWindow {
     }
 
     public override void Draw() {
+        WindowName = L.Label("Farm Automation");
         using var tabs = ImRaii.TabBar("Tabs");
         if (tabs) {
-            using (var tab = ImRaii.TabItem("Main"))
+            using (var tab = ImRaii.TabItem(L.Label("Main")))
                 if (tab)
                     DrawMain();
-            using (var tab = ImRaii.TabItem("Debug"))
+            using (var tab = ImRaii.TabItem(L.Label("Debug")))
                 if (tab)
                     _debug.Draw();
         }
     }
 
     private void DrawMain() {
-        if (UICombo.Enum("Auto Collect", ref _config.Collect))
+        if (UICombo.Enum(L.Label("Auto Collect"), ref _config.Collect))
             _config.NotifyModified();
         ImGui.Separator();
 
         var mji = MJIManager.Instance();
         var agent = AgentMJIFarmManagement.Instance();
         if (mji == null || mji->FarmState == null || mji->IslandState.Farm.EligibleForCare == 0 || agent == null) {
-            ImGui.TextUnformatted("Mammets not available!");
+            ImGui.TextUnformatted(L.Text("Mammets not available!"));
             return;
         }
 
@@ -58,12 +59,12 @@ public unsafe class FarmWindow : UIAttachedWindow {
         if (res != CollectResult.NothingToCollect) {
             // if there's uncollected stuff - propose to collect everything
             using (ImRaii.Disabled(res == CollectResult.EverythingCapped)) {
-                if (ImGui.Button("Collect all"))
+                if (ImGui.Button(L.Label("Collect all")))
                     CollectAll();
                 if (res != CollectResult.CanCollectSafely) {
                     ImGui.SameLine();
                     using (ImRaii.PushColor(ImGuiCol.Text, 0xff0000ff))
-                        ImGui.TextV(res == CollectResult.EverythingCapped ? "Inventory is full!" : "Warning: some resources will overcap!");
+                        ImGui.TextV(res == CollectResult.EverythingCapped ? L.Text("Inventory is full!") : L.Text("Warning: some resources will overcap!"));
                 }
             }
         }
@@ -77,11 +78,11 @@ public unsafe class FarmWindow : UIAttachedWindow {
             }
 
             using (ImRaii.Disabled(!canDismiss))
-                if (ImGui.Button("Dismiss all"))
+                if (ImGui.Button(L.Label("Dismiss all")))
                     DismissAll();
             ImGui.SameLine();
             using (ImRaii.Disabled(!canEntrust))
-                if (ImGui.Button("Entrust all"))
+                if (ImGui.Button(L.Label("Entrust all")))
                     EntrustAll();
         }
     }
@@ -89,8 +90,8 @@ public unsafe class FarmWindow : UIAttachedWindow {
     private void DrawPlotOperations() {
         using var table = ImRaii.Table("table", 2);
         if (table) {
-            ImGui.TableSetupColumn("Slot");
-            ImGui.TableSetupColumn("Operations");
+            ImGui.TableSetupColumn(L.Label("Slot"));
+            ImGui.TableSetupColumn(L.Label("Operations"));
             ImGui.TableHeadersRow();
 
             var agent = AgentMJIFarmManagement.Instance();
@@ -109,20 +110,20 @@ public unsafe class FarmWindow : UIAttachedWindow {
                 ImGui.TableNextColumn();
                 if (slot.YieldAvailable > 0) {
                     using (ImRaii.Disabled(full)) {
-                        if (ImGui.Button($"Collect##{i}"))
+                        if (ImGui.Button(L.Label("Collect") + $"_{i}"))
                             CollectOne(i, false);
                         ImGui.SameLine();
-                        if (ImGui.Button($"Collect & dismiss##{i}"))
+                        if (ImGui.Button(L.Label("Collect & dismiss") + $"_{i}"))
                             CollectOne(i, true);
                     }
                 }
                 else if (slot.UnderCare) {
-                    if (ImGui.Button($"Dismiss##{i}"))
+                    if (ImGui.Button(L.Label("Dismiss") + $"_{i}"))
                         DismissOne(i);
                 }
                 else if (slot.SeedItemId != 0) {
                     if (slot.WasUnderCare || Utils.NumCowries() >= 5) {
-                        if (ImGui.Button($"Entrust##{i}"))
+                        if (ImGui.Button(L.Label("Entrust") + $"_{i}"))
                             EntrustOne(i, slot.SeedItemId);
                     }
                     // else: not enough cowries

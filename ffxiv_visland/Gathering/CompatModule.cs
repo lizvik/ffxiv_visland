@@ -1,4 +1,4 @@
-﻿using FFXIVClientStructs.FFXIV.Client.Game.MJI;
+using FFXIVClientStructs.FFXIV.Client.Game.MJI;
 using visland.Helpers;
 
 namespace visland.Gathering;
@@ -15,13 +15,7 @@ internal class CompatModule {
                 AtkCallback.Fire("ContextIconMenu", true, -1);
         }
 
-        if (!PurificationManager.ListenersActive)
-            PurificationManager.EnableListeners();
-
         OverrideAFK.ResetTimers();
     }
 
-    public static void RestoreChanges() {
-        PurificationManager.DisableListeners();
-    }
 }

@@ -13,8 +13,8 @@ public static class ImGuiExtensions {
 
         public static bool IconButton(FontAwesomeIcon icon, string? tooltip = null) {
             var res = ImGuiComponents.IconButton(icon);
-            if (res && tooltip != null && ImGui.IsItemHovered())
-                ImGui.SetTooltip(tooltip);
+            if (tooltip != null && ImGui.IsItemHovered())
+                ImGui.SetTooltip(L.Text(tooltip));
             return res;
         }
     }

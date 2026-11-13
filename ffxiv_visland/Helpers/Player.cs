@@ -24,7 +24,7 @@ public static unsafe class Player {
     public static uint Territory => Service.ClientState.TerritoryType;
     public static bool Mounted => Service.Condition[ConditionFlag.Mounted];
     public static bool Mounting => Service.Condition[ConditionFlag.Mounting];
-    public static bool IsJumping => Service.Condition[ConditionFlag.Jumping];
+    public static bool IsJumping => Service.Condition[ConditionFlag.Jumping] || Service.Condition[ConditionFlag.Jumping61];
     public static bool IsCasting => Service.Condition[ConditionFlag.Casting];
     public static IEnumerable<IStatus> Status => Service.ObjectTable.LocalPlayer?.StatusList is { } list ? list : [];
     public static bool Normal => Service.Condition[ConditionFlag.NormalConditions];
@@ -33,8 +33,6 @@ public static unsafe class Player {
     public static bool InWater => Service.Condition[ConditionFlag.Swimming] || Service.Condition[ConditionFlag.Diving];
     public static float SprintCD => Status.FirstOrDefault(s => s.StatusId == 50)?.RemainingTime ?? 0;
     public static bool StellarSprinting => Status.Any(x => x.StatusId == 4398);
-    public static bool HasFoodBuff => Status.Any(x => x.StatusId == 48);
-    public static float FoodCD => Status.FirstOrDefault(s => s.StatusId == 48)?.RemainingTime ?? 0;
     public static float AnimationLock => ActionManager.Instance()->AnimationLock;
     public static bool InGatheringAnimation => Service.Condition[ConditionFlag.ExecutingGatheringAction];
     public static uint Gp => Service.ObjectTable.LocalPlayer?.CurrentGp ?? 0;
@@ -45,14 +43,13 @@ public static unsafe class Player {
 
     public static float DistanceTo(Vector3 pos) => Object == null ? float.MaxValue : Vector3.Distance(Object.Position, pos);
 
-    public static void EatFood(int id) {
-        if (InventoryManager.Instance()->GetInventoryItemCount((uint)id) > 0)
-            _action.Exec(() => AgentInventoryContext.Instance()->UseItem((uint)id));
-        else if (InventoryManager.Instance()->GetInventoryItemCount((uint)id, true) > 0)
-            _action.Exec(() => AgentInventoryContext.Instance()->UseItem((uint)id + 1_000_000));
+    public static bool IsMountUnlocked(uint id) => id != 0 && PlayerState.Instance()->IsMountUnlocked(id);
+    public static void Mount(uint id = 0) {
+        if (IsMountUnlocked(id))
+            ExecuteActionSafe(ActionType.Mount, id);
+        else
+            ExecuteActionSafe(ActionType.GeneralAction, 24);
     }
-
-    public static void Mount() => ExecuteActionSafe(ActionType.GeneralAction, 24);
     public static void Dismount() => ExecuteActionSafe(ActionType.GeneralAction, 23);
     public static void Jump() => ExecuteActionSafe(ActionType.GeneralAction, 2);
 
@@ -63,8 +60,6 @@ public static unsafe class Player {
         if (!IsOnIsland && SprintCD == 0)
             ExecuteActionSafe(ActionType.GeneralAction, 4);
     }
-
-    public static void RevealNode() => ExecuteActionSafe(ActionType.Action, visland.Gathering.GatheringActions.GetCurrentSurveyAbility());
 
     public static bool SwitchJob(uint classJobId) {
         if (Job == classJobId) return true;
@@ -80,9 +75,6 @@ public static unsafe class Player {
     }
 
     public static int JobLevel(uint classJobId) => Service.PlayerState.GetClassJobLevel(ClassJob.GetRow(classJobId)!.Value);
-
-    public static bool HasFood(uint foodId)
-        => InventoryManager.Instance()->GetInventoryItemCount(foodId) > 0 || InventoryManager.Instance()->GetInventoryItemCount(foodId, true) > 0;
 
     private static void ExecuteActionSafe(ActionType type, uint id, uint extraParam = 0)
         => _action.Exec(() => ActionManager.Instance()->UseAction(type, id, extraParam: extraParam));

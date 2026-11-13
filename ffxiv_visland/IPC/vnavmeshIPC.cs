@@ -2,6 +2,7 @@ using Dalamud.Plugin.Ipc;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Threading.Tasks;
+using System.Threading;
 
 namespace visland.IPC;
 
@@ -13,6 +14,7 @@ public class NavmeshIPC {
     private readonly ICallGateSubscriber<bool> _navReload;
     private readonly ICallGateSubscriber<bool> _navRebuild;
     private readonly ICallGateSubscriber<Vector3, Vector3, bool, Task<List<Vector3>>> _navPathfind;
+    private readonly ICallGateSubscriber<Vector3, Vector3, bool, CancellationToken, Task<List<Vector3>>> _navPathfindCancelable;
     private readonly ICallGateSubscriber<bool> _navIsAutoLoad;
     private readonly ICallGateSubscriber<bool, object> _navSetAutoLoad;
     private readonly ICallGateSubscriber<Vector3, float, float, Vector3?> _queryMeshNearestPoint;
@@ -21,6 +23,7 @@ public class NavmeshIPC {
     private readonly ICallGateSubscriber<object> _pathStop;
     private readonly ICallGateSubscriber<bool> _pathIsRunning;
     private readonly ICallGateSubscriber<int> _pathNumWaypoints;
+    private readonly ICallGateSubscriber<List<Vector3>> _pathListWaypoints;
     private readonly ICallGateSubscriber<bool> _pathGetMovementAllowed;
     private readonly ICallGateSubscriber<bool, object> _pathSetMovementAllowed;
     private readonly ICallGateSubscriber<bool> _pathGetAlignCamera;
@@ -36,6 +39,7 @@ public class NavmeshIPC {
         _navReload = Service.Interface.GetIpcSubscriber<bool>($"{Name}.Nav.Reload");
         _navRebuild = Service.Interface.GetIpcSubscriber<bool>($"{Name}.Nav.Rebuild");
         _navPathfind = Service.Interface.GetIpcSubscriber<Vector3, Vector3, bool, Task<List<Vector3>>>($"{Name}.Nav.Pathfind");
+        _navPathfindCancelable = Service.Interface.GetIpcSubscriber<Vector3, Vector3, bool, CancellationToken, Task<List<Vector3>>>($"{Name}.Nav.PathfindCancelable");
         _navIsAutoLoad = Service.Interface.GetIpcSubscriber<bool>($"{Name}.Nav.IsAutoLoad");
         _navSetAutoLoad = Service.Interface.GetIpcSubscriber<bool, object>($"{Name}.Nav.SetAutoLoad");
         _queryMeshNearestPoint = Service.Interface.GetIpcSubscriber<Vector3, float, float, Vector3?>($"{Name}.Query.Mesh.NearestPoint");
@@ -43,6 +47,7 @@ public class NavmeshIPC {
         _pathMoveTo = Service.Interface.GetIpcSubscriber<List<Vector3>, bool, object>($"{Name}.Path.MoveTo");
         _pathStop = Service.Interface.GetIpcSubscriber<object>($"{Name}.Path.Stop");
         _pathIsRunning = Service.Interface.GetIpcSubscriber<bool>($"{Name}.Path.IsRunning");
+        _pathListWaypoints = Service.Interface.GetIpcSubscriber<List<Vector3>>($"{Name}.Path.ListWaypoints");
         _pathNumWaypoints = Service.Interface.GetIpcSubscriber<int>($"{Name}.Path.NumWaypoints");
         _pathGetMovementAllowed = Service.Interface.GetIpcSubscriber<bool>($"{Name}.Path.GetMovementAllowed");
         _pathSetMovementAllowed = Service.Interface.GetIpcSubscriber<bool, object>($"{Name}.Path.SetMovementAllowed");
@@ -62,6 +67,8 @@ public class NavmeshIPC {
     public void Rebuild() { if (_navRebuild.HasFunction) _navRebuild.InvokeFunc(); }
     public Task<List<Vector3>>? Pathfind(Vector3 from, Vector3 to, bool fly = false)
         => _navPathfind.HasFunction ? _navPathfind.InvokeFunc(from, to, fly) : null;
+    public Task<List<Vector3>>? PathfindForLanding(Vector3 from, Vector3 to, CancellationToken cancellation)
+        => _navPathfindCancelable.HasFunction ? _navPathfindCancelable.InvokeFunc(from, to, true, cancellation) : Pathfind(from, to, true);
     public bool IsAutoLoad() => _navIsAutoLoad.HasFunction && _navIsAutoLoad.InvokeFunc();
     public void SetAutoLoad(bool value) { if (_navSetAutoLoad.HasAction) _navSetAutoLoad.InvokeAction(value); }
 
@@ -73,6 +80,7 @@ public class NavmeshIPC {
     public void MoveTo(List<Vector3> waypoints, bool fly) { if (_pathMoveTo.HasAction) _pathMoveTo.InvokeAction(waypoints, fly); }
     public void Stop() { if (_pathStop.HasAction) _pathStop.InvokeAction(); }
     public bool IsRunning() => _pathIsRunning.HasFunction && _pathIsRunning.InvokeFunc();
+    public List<Vector3>? ListWaypoints() => _pathListWaypoints.HasFunction ? _pathListWaypoints.InvokeFunc() : null;
     public int NumWaypoints() => _pathNumWaypoints.HasFunction ? _pathNumWaypoints.InvokeFunc() : 0;
     public bool GetMovementAllowed() => _pathGetMovementAllowed.HasFunction && _pathGetMovementAllowed.InvokeFunc();
     public void SetMovementAllowed(bool value) { if (_pathSetMovementAllowed.HasAction) _pathSetMovementAllowed.InvokeAction(value); }

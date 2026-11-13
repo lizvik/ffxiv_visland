@@ -50,18 +50,16 @@ public unsafe class WorkshopOCImport {
         ImGui.TextUnformatted($"This week → Season {thisSeason}" + (_seasonDB.TryGet(thisSeason, out var cur) ? $" ({cur.Date})" : " (missing)"));
         ImGui.TextUnformatted($"Next week → Season {nextSeason}" + (_seasonDB.TryGet(nextSeason, out var nxt) ? $" ({nxt.Date})" : " (missing)"));
 
-        if (ImGui.Button("Load This Week"))
+        if (ImGui.Button(L.Label("Load This Week")))
             LoadSeasonRecs(false);
         ImGui.SameLine();
-        if (ImGui.Button("Load Next Week"))
+        if (ImGui.Button(L.Label("Load Next Week")))
             LoadSeasonRecs(true);
-        ImGuiComponents.HelpMarker("Loads Overseas Casuals archive recommendations for the mapped season, then applies the favour mode from Settings.");
+        ImGuiComponents.HelpMarker(L.Text("Loads Overseas Casuals archive recommendations for the mapped season, then applies the favour mode from Settings."));
 
-        if (ImGui.Button("Import Recommendations From Clipboard"))
+        if (ImGui.Button(L.Label("Import Recommendations From Clipboard")))
             ImportRecsFromClipboard(false);
-        ImGuiComponents.HelpMarker("Legacy importer for schedules copied from Discord.\n" +
-                        "The importer detects item names (without \"Isleworks\" et al) on each line.\n" +
-                        "You can copy an entire workshop schedule from discord, junk included.");
+        ImGuiComponents.HelpMarker(L.Text("Legacy importer for schedules copied from Discord.\nThe importer detects item names (without \"Isleworks\" et al) on each line.\nYou can copy an entire workshop schedule from discord, junk included."));
 
         if (Recommendations.Empty)
             return;
@@ -72,10 +70,10 @@ public unsafe class WorkshopOCImport {
         ImGui.Separator();
 
         if (_config.UseFavourSolver) {
-            ImGui.TextUnformatted("Advanced favour overrides");
-            ImGuiComponents.HelpMarker("Manual overrides for the currently loaded schedule. Archive loads already apply the favour mode from Settings.");
+            ImGui.TextUnformatted(L.Text("Advanced favour overrides"));
+            ImGuiComponents.HelpMarker(L.Text("Manual overrides for the currently loaded schedule. Archive loads already apply the favour mode from Settings."));
 
-            ImGui.TextV("Override 4th workshop with favours:");
+            ImGui.TextV(L.Text("Override 4th workshop with favours:"));
             ImGui.SameLine();
             if (ImGui.Button($"This Week##4th"))
                 OverrideSideRecsLastWorkshopSolver(false);
@@ -83,7 +81,7 @@ public unsafe class WorkshopOCImport {
             if (ImGui.Button($"Next Week##4th"))
                 OverrideSideRecsLastWorkshopSolver(true);
 
-            ImGui.TextV("Override closest workshops with favours:");
+            ImGui.TextV(L.Text("Override closest workshops with favours:"));
             ImGui.SameLine();
             if (ImGui.Button($"This Week##asap"))
                 OverrideSideRecsAsapSolver(false);
@@ -91,9 +89,9 @@ public unsafe class WorkshopOCImport {
             if (ImGui.Button($"Next Week##asap"))
                 OverrideSideRecsAsapSolver(true);
 
-            if (ImGui.Button("Override 4th workshop from clipboard"))
+            if (ImGui.Button(L.Label("Override 4th workshop from clipboard")))
                 OverrideSideRecsLastWorkshopClipboard();
-            if (ImGui.Button("Override closest workshops from clipboard"))
+            if (ImGui.Button(L.Label("Override closest workshops from clipboard")))
                 OverrideSideRecsAsapClipboard();
 
             if (ImGuiComponents.IconButtonWithText(Dalamud.Interface.FontAwesomeIcon.Clipboard, "Copy /favors (this week)")) {
@@ -117,16 +115,16 @@ public unsafe class WorkshopOCImport {
             ImGui.Separator();
         }
 
-        ImGui.TextV("Set Schedule:");
+        ImGui.TextV(L.Text("Set Schedule:"));
         ImGui.SameLine();
-        if (ImGui.Button("This Week"))
+        if (ImGui.Button(L.Label("This Week")))
             ApplyRecommendations(false);
         ImGui.SameLine();
-        if (ImGui.Button("Next Week"))
+        if (ImGui.Button(L.Label("Next Week")))
             ApplyRecommendations(true);
         ImGui.SameLine();
         var ignoreFourth = _applier.IgnoreFourthWorkshop;
-        if (ImGui.Checkbox("Ignore 4th Workshop", ref ignoreFourth))
+        if (ImGui.Checkbox(L.Label("Ignore 4th Workshop"), ref ignoreFourth))
             _applier.IgnoreFourthWorkshop = ignoreFourth;
         ImGui.Separator();
 

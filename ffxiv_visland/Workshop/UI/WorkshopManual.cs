@@ -1,4 +1,4 @@
-﻿using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Dalamud.Bindings.ImGui;
 using Lumina.Excel.Sheets;
 using System;
@@ -12,7 +12,7 @@ public class WorkshopManual {
     private string _filter = "";
 
     public void Draw() {
-        ImGui.InputText("Filter", ref _filter, 256);
+        ImGui.InputText(L.Label("Filter"), ref _filter, 256);
         var sheetCraft = MJICraftworksObject.Get();
         foreach (var row in sheetCraft) {
             var name = row.Item.Value.Name.ToString() ?? "";
@@ -22,7 +22,7 @@ public class WorkshopManual {
         }
 
         ImGui.Separator();
-        ImGui.TextUnformatted("Recent items:");
+        ImGui.TextUnformatted(L.Text("Recent items:"));
         foreach (var i in _recents.ToArray()) // copy, since we might modify it...
         {
             DrawRowCraft(sheetCraft.GetRow(i)!, true);

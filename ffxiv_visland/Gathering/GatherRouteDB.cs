@@ -12,11 +12,6 @@ using visland.Helpers;
 namespace visland.Gathering;
 
 public class GatherRouteDB : Configuration.Node {
-    // ClassJob row IDs used for gathering job swaps.
-    public const uint ClassJobMiner = 16;
-    public const uint ClassJobBotanist = 17;
-    public const uint ClassJobFisher = 18;
-
     public enum Movement {
         Normal = 0,
         MountFly = 1,
@@ -27,7 +22,6 @@ public class GatherRouteDB : Configuration.Node {
         None = 0,
         Standard = 1,
         StartRoute = 9,
-        NodeScan = 12,
     }
 
     public class Waypoint {
@@ -50,23 +44,12 @@ public class GatherRouteDB : Configuration.Node {
         public Vector2 WaitTimeET;
 
         public bool NeedsMount => Movement is Movement.MountFly or Movement.MountNoFly;
-        public uint GatheringType => IsNode ? GatheringPoint.GetRow(InteractWithOID)!.Value.GatheringPointBase.Value.GatheringType.RowId : 99;
-        public bool IsNode => GatheringPoint.Get().HasRow(InteractWithOID);
-        public uint NodeJob => GatheringType switch {
-            _ when !IsNode => 0,
-            0 or 1 => ClassJobMiner,
-            2 or 3 => ClassJobBotanist,
-            4 or 5 => ClassJobFisher,
-            _ => 0
-        };
         public bool IsPhantom;
     }
 
     public class Route {
         public string Name = "";
         public string Group = "";
-        public int Food;
-        public int TargetGatherItem;
         public List<Waypoint> Waypoints = [];
     }
 
@@ -74,18 +57,15 @@ public class GatherRouteDB : Configuration.Node {
     public float DefaultWaypointRadius = 3;
     public float DefaultInteractionRadius = 2;
     public bool GatherModeOnStart = true;
-    public bool DisableOnErrors;
+    public bool StopOnInventoryFull;
 
-    public bool ExtractMateria = true;
-    public bool RepairGear = true;
-    public float RepairPercent = 20;
-    public bool PurifyCollectables;
-
-    public int GlobalFood;
-
-    public bool AutoRetainerIntegration;
-    public bool TeleportBetweenZones = true;
-    public bool AutoGather;
+    public bool OptimizeRoutes = true;
+    public uint MountId;
+    public bool AllowFlight = true;
+    public float MountDistance = 20;
+    public float FlightDistance = 40;
+    public int StuckTimeoutSeconds = 10;
+    public int StuckMaxRetries = 3;
 
     public override void Deserialize(JObject j, JsonSerializer ser) {
         Routes.Clear();
@@ -98,25 +78,23 @@ public class GatherRouteDB : Configuration.Node {
                 Routes.Add(new Route {
                     Name = jn,
                     Group = jr["Group"]?.Value<string>() ?? "",
-                    Food = jr["Food"]?.Value<int>() ?? 0,
-                    TargetGatherItem = jr["TargetGatherItem"]?.Value<int>() ?? 0,
                     Waypoints = LoadFromJSONWaypoints(jw),
                 });
             }
         }
-        DisableOnErrors = (bool?)j["DisableOnErrors"] ?? false;
+        StuckMaxRetries = Math.Clamp((int?)j["StuckMaxRetries"] ?? 3, 0, 20);
+        StuckTimeoutSeconds = Math.Clamp((int?)j["StuckTimeoutSeconds"] ?? 10, 0, 300);
+        MountId = (uint?)j["MountId"] ?? 0;
+        AllowFlight = (bool?)j["AllowFlight"] ?? true;
+        MountDistance = Math.Clamp((float?)j["MountDistance"] ?? 20, 5, 100);
+        FlightDistance = Math.Clamp((float?)j["FlightDistance"] ?? 40, MountDistance, 200);
+        OptimizeRoutes = (bool?)j["OptimizeRoutes"] ?? true;
+        StopOnInventoryFull = (bool?)j["StopOnInventoryFull"] ?? (bool?)j["DisableOnErrors"] ?? false;
         GatherModeOnStart = (bool?)j["GatherModeOnStart"] ?? true;
         DefaultWaypointRadius = (float?)j["DefaultWaypointRadius"] ?? 3;
         DefaultInteractionRadius = (float?)j["DefaultInteractionRadius"] ?? 2;
-        TeleportBetweenZones = (bool?)j["TeleportBetweenZones"] ?? true;
-        AutoRetainerIntegration = (bool?)j["AutoRetainerIntegration"] ?? false;
-        AutoGather = (bool?)j["AutoGather"] ?? false;
-        ExtractMateria = (bool?)j["ExtractMateria"] ?? true;
-        RepairGear = (bool?)j["RepairGear"] ?? true;
-        RepairPercent = (float?)j["RepairPercent"] ?? 20;
-        PurifyCollectables = (bool?)j["Desynth"] ?? false;
-        GlobalFood = (int?)j["GlobalFood"] ?? 0;
-        // Intentionally ignore obsolete keys: Manual, GlobalManual, WasFlyingInManual,
+        // Intentionally ignore obsolete extras (Food, GlobalFood, ExtractMateria, RepairGear,
+        // RepairPercent, Desynth, AutoRetainerIntegration) and legacy keys: Manual, GlobalManual, WasFlyingInManual,
         // LandDistance, PathFindCancellationTime, EmoteID, ActionID, ItemID, MobID, QuestID, ChatCommand, etc.
     }
 
@@ -126,25 +104,22 @@ public class GatherRouteDB : Configuration.Node {
             res.Add(new JObject {
                 { "Name", r.Name },
                 { "Group", r.Group },
-                { "Food", r.Food },
-                { "TargetGatherItem", r.TargetGatherItem },
                 { "Waypoints", SaveToJSONWaypoints(r.Waypoints) },
             });
         }
         return new JObject {
             { "Routes", res },
-            { "DisableOnErrors", DisableOnErrors },
+            { "OptimizeRoutes", OptimizeRoutes },
+            { "MountId", MountId },
+            { "AllowFlight", AllowFlight },
+            { "MountDistance", MountDistance },
+            { "FlightDistance", FlightDistance },
+            { "StuckTimeoutSeconds", StuckTimeoutSeconds },
+            { "StuckMaxRetries", StuckMaxRetries },
+            { "StopOnInventoryFull", StopOnInventoryFull },
             { "GatherModeOnStart", GatherModeOnStart },
             { "DefaultWaypointRadius", DefaultWaypointRadius },
             { "DefaultInteractionRadius", DefaultInteractionRadius },
-            { "TeleportBetweenZones", TeleportBetweenZones },
-            { "ExtractMateria", ExtractMateria },
-            { "RepairGear", RepairGear },
-            { "RepairPercent", RepairPercent },
-            { "Desynth", PurifyCollectables },
-            { "GlobalFood", GlobalFood },
-            { "AutoRetainerIntegration", AutoRetainerIntegration },
-            { "AutoGather", AutoGather },
         };
     }
 
@@ -190,7 +165,7 @@ public class GatherRouteDB : Configuration.Node {
                 // Parse known InteractionType values; map obsolete experimental values to None/Standard safely.
                 var interactionRaw = o["Interaction"]?.Value<string>();
                 var interaction = InteractionType.Standard;
-                if (!string.IsNullOrEmpty(interactionRaw) && !Enum.TryParse(interactionRaw, out interaction))
+                if (!string.IsNullOrEmpty(interactionRaw) && (!Enum.TryParse(interactionRaw, out interaction) || !Enum.IsDefined(interaction)))
                     interaction = InteractionType.None;
 
                 res.Add(new Waypoint {
@@ -255,7 +230,7 @@ public class GatherRouteDB : Configuration.Node {
                 return;
 
             // Unknown / obsolete waypoint keys are ignored by Newtonsoft (MissingMemberHandling.Ignore).
-            if (import.Waypoints.Any(x => (x.Pathfind || x.Interaction == InteractionType.NodeScan) && !Service.Navmesh.IsEnabled))
+            if (import.Waypoints.Any(x => x.Pathfind && !Service.Navmesh.IsEnabled))
                 Service.ChatGui.Print($"[{Service.Interface.InternalName}] Imported route uses pathfinding, but vnavmesh is not installed. It's located on the same repo as {Service.Interface.InternalName} ({Plugin.Repo}).");
 
             routeDB.Routes.Add(import);

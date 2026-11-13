@@ -1,4 +1,4 @@
-﻿using Dalamud.Game.Command;
+using Dalamud.Game.Command;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using System.Globalization;
@@ -7,7 +7,6 @@ using System.Numerics;
 using visland.Export;
 using visland.Farm;
 using visland.Gathering;
-using visland.Gathering.AutoGather;
 using visland.Granary;
 using visland.Helpers;
 using visland.Pasture;
@@ -31,7 +30,6 @@ public sealed class Plugin : IDalamudPlugin {
 
     internal static Plugin P = null!;
 
-    private readonly AutoGatherController _autoGather;
     private readonly WindowSystem _windowSystem = new("visland");
 
     public unsafe Plugin(IDalamudPluginInterface dalamud) {
@@ -43,7 +41,6 @@ public sealed class Plugin : IDalamudPlugin {
 
         P = this;
         _windowSystem.Add(new GatherWindow(), new WorkshopWindow(), new GranaryWindow(), new PastureWindow(), new FarmWindow(), new ExportWindow());
-        _autoGather = new AutoGatherController();
 
         Service.Interface.UiBuilder.Draw += OnDraw;
         Service.CommandManager.AddHandler("/visland", new CommandInfo(OnCommand) { HelpMessage = HelpMessage });
@@ -53,7 +50,6 @@ public sealed class Plugin : IDalamudPlugin {
     public void Dispose() {
         Service.CommandManager.RemoveHandler("/visland");
         Service.Interface.UiBuilder.Draw -= OnDraw;
-        _autoGather.Dispose();
         _windowSystem.Dispose();
         Service.Dispose();
     }

@@ -11,7 +11,7 @@ unsafe class WorkshopWindow : UIAttachedWindow {
     private readonly WorkshopOCImport _oc = new();
     private readonly WorkshopDebug _debug = new();
 
-    public WorkshopWindow() : base("Workshop automation", "MJICraftSchedule", new(500, 650)) {
+    public WorkshopWindow() : base(L.Label("Workshop automation"), "MJICraftSchedule", new(500, 650)) {
         _config = Service.Config.Get<WorkshopConfig>();
     }
 
@@ -24,18 +24,19 @@ unsafe class WorkshopWindow : UIAttachedWindow {
     }
 
     public override void Draw() {
+        WindowName = L.Label("Workshop automation");
         using var tabs = ImRaii.TabBar("Tabs");
         if (tabs) {
-            using (var tab = ImRaii.TabItem("Schedule"))
+            using (var tab = ImRaii.TabItem(L.Label("Schedule")))
                 if (tab)
                     _oc.Draw();
-            using (var tab = ImRaii.TabItem("Manual schedule"))
+            using (var tab = ImRaii.TabItem(L.Label("Manual schedule")))
                 if (tab)
                     _manual.Draw();
-            using (var tab = ImRaii.TabItem("Settings"))
+            using (var tab = ImRaii.TabItem(L.Label("Settings")))
                 if (tab)
                     DrawSettings();
-            using (var tab = ImRaii.TabItem("Debug"))
+            using (var tab = ImRaii.TabItem(L.Label("Debug")))
                 if (tab)
                     _debug.Draw();
         }
@@ -52,13 +53,13 @@ unsafe class WorkshopWindow : UIAttachedWindow {
     }
 
     private void DrawSettings() {
-        if (ImGui.Checkbox("Automatically select next cycle on open", ref _config.AutoOpenNextDay))
+        if (ImGui.Checkbox(L.Label("Automatically select next cycle on open"), ref _config.AutoOpenNextDay))
             _config.NotifyModified();
-        if (ImGui.Checkbox("Automatically load archive recs on open", ref _config.AutoImport))
+        if (ImGui.Checkbox(L.Label("Automatically load archive recs on open"), ref _config.AutoImport))
             _config.NotifyModified();
 
         ImGui.Separator();
-        ImGui.TextUnformatted("Favour integration");
+        ImGui.TextUnformatted(L.Text("Favour integration"));
         var mode = (int)_config.FavourMode;
         var modes = new[] {
             "None — OC schedule only",
@@ -79,8 +80,8 @@ unsafe class WorkshopWindow : UIAttachedWindow {
         });
 
         ImGui.Separator();
-        if (ImGui.Checkbox("Show advanced favour override controls", ref _config.UseFavourSolver))
+        if (ImGui.Checkbox(L.Label("Show advanced favour override controls"), ref _config.UseFavourSolver))
             _config.NotifyModified();
-        ImGui.TextWrapped("Shows manual favour-solver / clipboard override buttons on the Schedule tab.");
+        ImGui.TextWrapped(L.Text("Shows manual favour-solver / clipboard override buttons on the Schedule tab."));
     }
 }
