@@ -138,6 +138,7 @@
   "Workshop.FavourModeFreeRestDay": "使用 MinMax，并用第二休息日完成大部分偏好",
   "Workshop.FavourModeMinMax": "尽量保留高价值产品，尝试同时长替换，优先舍弃低价值天数或工坊",
   "Workshop.FavourModeReplaceFourth": "保留工坊 1–3，第四工坊满足偏好",
+  "Workshop.FavourRecipeUnavailable": "当前角色尚未解锁所需的特需配方。",
   "Workshop.FetchDemand": "获取需求",
   "Workshop.Ignore4thWorkshop": "忽略第四工坊",
   "Workshop.ImportRecommendationsFromClipboard": "从剪贴板导入推荐",
@@ -152,10 +153,12 @@
   "Workshop.OverrideClosestWorkshopsFromClipboard": "从剪贴板覆盖最近的工坊",
   "Workshop.OverrideClosestWorkshopsWithFavours": "以偏好覆盖最近的工坊：",
   "Workshop.RecentItems": "最近物品：",
+  "Workshop.RecipePlanningUnavailable": "无法生成完整的 24 小时排班，请在无人岛内打开工坊并确认已解锁配方。",
   "Workshop.RefreshFavoursDemand": "刷新偏好和需求",
   "Workshop.Schedule": "排程",
   "Workshop.SetSchedule": "设置排程：",
   "Workshop.ShowAdvancedFavourOverrideControls": "显示高级偏好覆盖控件",
   "Workshop.Solve": "求解！",
+  "Workshop.UnlockedSchedulesRebuilt": "已使用当前角色解锁的配方重新计算 {0} 份工坊排班，每份排满 24 小时。",
   "Workshop.Void2ndRestThisWeek": "取消第二休息日（本周）"
 }

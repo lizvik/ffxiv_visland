@@ -10,6 +10,9 @@ internal class ScheduleApplier {
     public bool IgnoreFourthWorkshop { get; set; }
 
     public unsafe int ApplyRecommendation(int cycle, WorkshopSolver.DayRec rec, int minStartingHour = 0) {
+        var recommendations = new WorkshopSolver.Recs();
+        recommendations.Add(1, rec);
+        rec = WorkshopUtils.RecalculateRecipes(recommendations, cycle >= 7).Schedules[0];
         var maxWorkshops = WorkshopUtils.GetMaxWorkshops();
         var scheduled = 0;
         foreach (var w in rec.Enumerate(maxWorkshops))
@@ -17,8 +20,8 @@ internal class ScheduleApplier {
                 foreach (var r in w.rec.Slots) {
                     if (r.Slot < minStartingHour)
                         continue;
-                    WorkshopUtils.ScheduleItemToWorkshop(r.CraftObjectId, r.Slot, cycle, w.workshop);
-                    scheduled++;
+                    if (WorkshopUtils.ScheduleItemToWorkshop(r.CraftObjectId, r.Slot, cycle, w.workshop))
+                        scheduled++;
                 }
         return scheduled;
     }
@@ -32,6 +35,7 @@ internal class ScheduleApplier {
     }
 
     public unsafe void ApplyRecommendations(WorkshopSolver.Recs recommendations, bool nextWeek) {
+        recommendations = WorkshopUtils.RecalculateRecipes(recommendations, nextWeek);
         var agentData = AgentMJICraftSchedule.Instance()->Data;
         var restDaysCount = BitOperations.PopCount(~recommendations.CyclesMask & 0x7F);
         if (recommendations.Schedules.Count + restDaysCount > 7)
@@ -51,10 +55,9 @@ internal class ScheduleApplier {
         foreach ((var c, var r) in recommendations.Enumerate()) {
             if ((completedCycles & (1u << (c - 1))) != 0)
                 continue;
-            if (c - 1 == cycleInProgress)
-                hasApplicable |= r.Workshops.Any(w => w.Slots.Any(s => s.Slot >= hourSinceStart));
-            else
-                hasApplicable = true;
+            var minHour = c - 1 == cycleInProgress ? hourSinceStart : 0;
+            hasApplicable |= r.Workshops.Any(w => w.Slots.Any(s => s.Slot >= minHour
+                && WorkshopUtils.IsRecipeUnlocked(s.CraftObjectId)));
         }
         if (!hasApplicable)
             throw new Exception("No remaining cycles to apply — the whole schedule is already done or in progress");

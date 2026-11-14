@@ -4,6 +4,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using visland.Helpers;
 
 namespace visland.Workshop;
@@ -32,9 +33,51 @@ public static unsafe class WorkshopUtils {
         Utils.SynthesizeEvent(&AgentMJICraftSchedule.Instance()->AgentInterface, 6, [new() { Type = AtkValueType.Int, Int = 0 }]);
     }
 
-    public static void ScheduleItemToWorkshop(uint objId, int startingHour, int cycle, int workshop) {
+    // Craftworks use MJICraftworksObject.LevelReq, not the separate MJIRecipe unlock flags.
+    public static bool IsRecipeUnlocked(MJICraftworksObject recipe) {
+        var manager = MJIManager.Instance();
+        return recipe.RowId != 0 && recipe.CraftingTime > 0 && manager != null
+            && manager->IsPlayerInSanctuary && recipe.LevelReq <= manager->IslandState.CurrentRank;
+    }
+
+    public static bool IsRecipeUnlocked(uint craftObjectId)
+        => MJICraftworksObject.GetRow(craftObjectId) is { } recipe && IsRecipeUnlocked(recipe);
+
+    public static WorkshopSolver.Recs RecalculateRecipes(WorkshopSolver.Recs recommendations, bool nextWeek = false, bool notify = false) {
+        var manager = MJIManager.Instance();
+        if (manager == null || !manager->IsPlayerInSanctuary)
+            throw new InvalidOperationException(Localization.GetText(LocalizationKeys.Workshop.RecipePlanningUnavailable));
+        var popularity = new WorkshopSolver.Popularity();
+        if (!manager->DemandDirty)
+            popularity.Set(nextWeek ? manager->NextPopularity : manager->CurrentPopularity);
+        var recipes = MJICraftworksObject.Get().Where(IsRecipeUnlocked).OrderBy(recipe => recipe.RowId)
+            .Select(recipe => new WorkshopSchedulePlanner.Recipe(recipe.RowId, recipe.CraftingTime,
+                recipe.Value * popularity.Multiplier(recipe.RowId), recipe.Theme[0].RowId, recipe.Theme[1].RowId)).ToArray();
+        WorkshopSolver.Recs result;
+        int rebuilt;
+        try {
+            result = recommendations.RebuildRecipes(recipes, out rebuilt);
+        }
+        catch (InvalidOperationException) {
+            throw new InvalidOperationException(Localization.GetText(LocalizationKeys.Workshop.RecipePlanningUnavailable));
+        }
+        if (rebuilt > 0) {
+            var message = Localization.FormatText(LocalizationKeys.Workshop.UnlockedSchedulesRebuilt, rebuilt);
+            Service.Log.Info(message);
+            if (notify)
+                Service.ChatGui.Print(message, "visland");
+        }
+        return result;
+    }
+
+    public static bool ScheduleItemToWorkshop(uint objId, int startingHour, int cycle, int workshop) {
+        if (!IsRecipeUnlocked(objId)) {
+            Service.Log.Warning($"Skipping unavailable workshop recipe {objId}");
+            return false;
+        }
         Service.Log.Info($"Adding schedule: {objId} @ {startingHour}/{cycle}/{workshop}");
         MJIManager.Instance()->ScheduleCraft((ushort)objId, (byte)((startingHour + 17) % 24), (byte)cycle, (byte)workshop);
+        return true;
     }
 
     // this is what the game uses to refresh the ui after adding schedules

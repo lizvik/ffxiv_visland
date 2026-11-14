@@ -133,7 +133,7 @@ public unsafe class WorkshopOCImport {
 
     public void ImportRecsFromClipboard(bool silent) {
         try {
-            Recommendations = _parser.ParseRecs(ImGui.GetClipboardText());
+            Recommendations = RecalculateUnlockedRecipes(_parser.ParseRecs(ImGui.GetClipboardText()), notify: !silent);
             _loadedSeason = 0;
         }
         catch (Exception ex) {
@@ -166,7 +166,7 @@ public unsafe class WorkshopOCImport {
 
     private void ApplySeason(bool nextWeek, WorkshopSolver.FavourState? favours) {
         var season = _seasonDB.CurrentSeason(nextWeek);
-        var baseRecs = _seasonDB.BuildRecs(season);
+        var baseRecs = RecalculateUnlockedRecipes(_seasonDB.BuildRecs(season), nextWeek);
         Recommendations = favours == null || _config.FavourMode == FavourMode.None
             ? baseRecs
             : FavourIntegration.Apply(baseRecs, _config.FavourMode, favours.Value, _craftSheet, _seasonDB.RestCycles(season));
@@ -254,6 +254,7 @@ public unsafe class WorkshopOCImport {
                 r.Workshops.RemoveAt(r.Workshops.Count - 1);
             r.Workshops.Add(o);
         }
+        Recommendations = RecalculateUnlockedRecipes(Recommendations, _loadedNextWeek);
         if (overrides.Count > Recommendations.Schedules.Count)
             Service.ChatGui.Print("Warning: couldn't fit all overrides into base schedule", "visland");
     }
@@ -293,18 +294,23 @@ public unsafe class WorkshopOCImport {
             r.Workshops.AddRange(overrides.Skip(nextOverride).Take(batchSize));
             nextOverride += batchSize;
         }
+        Recommendations = RecalculateUnlockedRecipes(Recommendations, _loadedNextWeek);
         if (nextOverride < overrides.Count)
             Service.ChatGui.Print("Warning: couldn't fit all overrides into base schedule", "visland");
     }
 
     private void ApplyRecommendations(bool nextWeek) {
         try {
+            Recommendations = RecalculateUnlockedRecipes(Recommendations, nextWeek);
             _applier.ApplyRecommendations(Recommendations, nextWeek);
         }
         catch (Exception ex) {
             ReportError($"Error: {ex.Message}");
         }
     }
+
+    private static WorkshopSolver.Recs RecalculateUnlockedRecipes(WorkshopSolver.Recs recommendations, bool nextWeek = false, bool notify = true)
+        => WorkshopUtils.RecalculateRecipes(recommendations, nextWeek, notify);
 
     private static void ReportError(string msg, bool silent = false) {
         Service.Log.Error(msg);

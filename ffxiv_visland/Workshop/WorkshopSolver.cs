@@ -69,6 +69,30 @@ public class WorkshopSolver {
             }
         }
 
+        // Keep cycle/workshop positions; rebuild invalid or incomplete days using unlocked recipes.
+        internal Recs RebuildRecipes(IReadOnlyList<WorkshopSchedulePlanner.Recipe> recipes, out int rebuiltWorkshops) {
+            var available = recipes.ToDictionary(recipe => recipe.Id);
+            WorkshopRec? replacement = null;
+            rebuiltWorkshops = 0;
+            var result = new Recs();
+            foreach (var (cycle, day) in Enumerate()) {
+                var rebuiltDay = new DayRec();
+                foreach (var workshop in day.Workshops) {
+                    var source = workshop;
+                    if (!WorkshopSchedulePlanner.IsComplete(workshop, available)) {
+                        replacement ??= WorkshopSchedulePlanner.Solve(recipes);
+                        source = replacement;
+                        rebuiltWorkshops++;
+                    }
+                    var rebuiltWorkshop = new WorkshopRec();
+                    rebuiltWorkshop.Slots.AddRange(source.Slots);
+                    rebuiltDay.Workshops.Add(rebuiltWorkshop);
+                }
+                result.Add(cycle, rebuiltDay);
+            }
+            return result;
+        }
+
         public void Clear() {
             _schedules.Clear();
             CyclesMask = 0;
@@ -119,5 +143,5 @@ public class WorkshopSolver {
         return l1 == r1 || l1 == r2 || l2 != 0 && (l2 == r1 || l2 == r2);
     }
 
-    public static IEnumerable<MJICraftworksObject> Linked(MJICraftworksObject obj, int duration) => MJICraftworksObject.Get()!.Where(o => o.CraftingTime == duration && IsLinked(o, obj));
+    public static IEnumerable<MJICraftworksObject> Linked(MJICraftworksObject obj, int duration) => MJICraftworksObject.Get()!.Where(o => o.CraftingTime == duration && WorkshopUtils.IsRecipeUnlocked(o) && IsLinked(o, obj));
 }

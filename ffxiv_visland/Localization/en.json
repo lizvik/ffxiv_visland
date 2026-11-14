@@ -138,6 +138,7 @@
   "Workshop.FavourModeFreeRestDay": "MinMax but use the second rest day for most of the favours",
   "Workshop.FavourModeMinMax": "Try to keep high-value crafts, try same-duration substitutions, sacrifice lowest-value days/workshops",
   "Workshop.FavourModeReplaceFourth": "Keep workshops 1-3, fill 4 with favours",
+  "Workshop.FavourRecipeUnavailable": "A favour recipe is not unlocked for the current character.",
   "Workshop.FetchDemand": "Fetch demand",
   "Workshop.Ignore4thWorkshop": "Ignore 4th Workshop",
   "Workshop.ImportRecommendationsFromClipboard": "Import Recommendations From Clipboard",
@@ -152,10 +153,12 @@
   "Workshop.OverrideClosestWorkshopsFromClipboard": "Override closest workshops from clipboard",
   "Workshop.OverrideClosestWorkshopsWithFavours": "Override closest workshops with favours:",
   "Workshop.RecentItems": "Recent items:",
+  "Workshop.RecipePlanningUnavailable": "Unable to build a full 24-hour schedule. Open the workshop on your island and check unlocked recipes.",
   "Workshop.RefreshFavoursDemand": "Refresh favours/demand",
   "Workshop.Schedule": "Schedule",
   "Workshop.SetSchedule": "Set Schedule:",
   "Workshop.ShowAdvancedFavourOverrideControls": "Show advanced favour override controls",
   "Workshop.Solve": "Solve!",
+  "Workshop.UnlockedSchedulesRebuilt": "Recalculated {0} workshop schedule(s) using unlocked recipes; each fills 24 hours.",
   "Workshop.Void2ndRestThisWeek": "Void 2nd rest (this week)"
 }

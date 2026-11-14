@@ -29,9 +29,10 @@ public static unsafe class Player {
     public static IEnumerable<IStatus> Status => Service.ObjectTable.LocalPlayer?.StatusList is { } list ? list : [];
     public static bool Normal => Service.Condition[ConditionFlag.NormalConditions];
     public static bool ExclusiveFlying => Service.Condition[ConditionFlag.InFlight];
-    public static bool InclusiveFlying => Service.Condition[ConditionFlag.InFlight] || Service.Condition[ConditionFlag.Diving];
+    public static bool IsDiving => Service.Condition[ConditionFlag.Diving];
+    public static bool InclusiveFlying => ExclusiveFlying || IsDiving;
     public static bool InWater => Service.Condition[ConditionFlag.Swimming] || Service.Condition[ConditionFlag.Diving];
-    public static float SprintCD => Status.FirstOrDefault(s => s.StatusId == 50)?.RemainingTime ?? 0;
+    public static float SprintRemainingTime => Status.FirstOrDefault(s => s.StatusId == 50)?.RemainingTime ?? 0;
     public static bool StellarSprinting => Status.Any(x => x.StatusId == 4398);
     public static float AnimationLock => ActionManager.Instance()->AnimationLock;
     public static bool InGatheringAnimation => Service.Condition[ConditionFlag.ExecutingGatheringAction];
@@ -54,11 +55,21 @@ public static unsafe class Player {
     public static void Jump() => ExecuteActionSafe(ActionType.GeneralAction, 2);
 
     public static void Sprint() {
-        if (Mounted || StellarSprinting) return;
-        if (IsOnIsland && SprintCD < 5)
-            ExecuteActionSafe(ActionType.Action, 31314);
-        if (!IsOnIsland && SprintCD == 0)
-            ExecuteActionSafe(ActionType.GeneralAction, 4);
+        if (!Available || Mounted || Mounting || IsCasting || IsJumping || ExclusiveFlying
+            || InGatheringAnimation || AnimationLock > 0 || SprintRemainingTime > 0 || StellarSprinting)
+            return;
+        // Isle Sprint upgrades the permanent jogging effect after its 20-second sprint expires.
+        // Check the action's actual availability rather than treating buff duration as cooldown.
+        var onIsland = IsOnIsland;
+        // Isle Sprint is also considered while swimming/diving; the game determines availability.
+        if (InWater && !onIsland) return;
+        var actionType = onIsland ? ActionType.Action : ActionType.GeneralAction;
+        var actionId = onIsland ? 31314u : 4u;
+        _sprint.Exec(() => {
+            var manager = ActionManager.Instance();
+            if (manager != null && manager->GetActionStatus(actionType, actionId) == 0)
+                manager->UseAction(actionType, actionId);
+        }, 1);
     }
 
     public static bool SwitchJob(uint classJobId) {
@@ -80,4 +91,5 @@ public static unsafe class Player {
         => _action.Exec(() => ActionManager.Instance()->UseAction(type, id, extraParam: extraParam));
 
     private static readonly Throttle _action = new();
+    private static readonly Throttle _sprint = new();
 }

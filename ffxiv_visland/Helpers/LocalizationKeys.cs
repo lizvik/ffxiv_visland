@@ -150,6 +150,9 @@ public static class LocalizationKeys {
     }
 
     public static class Workshop {
+        public const string FavourRecipeUnavailable = "Workshop.FavourRecipeUnavailable";
+        public const string RecipePlanningUnavailable = "Workshop.RecipePlanningUnavailable";
+        public const string UnlockedSchedulesRebuilt = "Workshop.UnlockedSchedulesRebuilt";
         public const string AdvancedFavourHelp = "Workshop.AdvancedFavourHelp";
         public const string AdvancedFavourOverrides = "Workshop.AdvancedFavourOverrides";
         public const string AutoLoadArchive = "Workshop.AutoLoadArchive";

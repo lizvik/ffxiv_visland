@@ -9,11 +9,14 @@ internal sealed class GroundShortcut {
     private long _started, _lastProgress;
     private float _bestDistance;
     private bool _jumped;
+    private int _maximumDurationMs, _stallTimeoutMs;
     public bool Active { get; private set; }
     public bool Attempted { get; private set; }
     public void Reset() { Active = Attempted = _jumped = false; }
     public void Cancel() { Active = false; }
-    public void Begin(long now, float distance) {
+    public void Begin(long now, float distance, int maximumDurationMs = 6000, int stallTimeoutMs = 1200) {
+        _maximumDurationMs = Math.Max(1, maximumDurationMs);
+        _stallTimeoutMs = Math.Max(1, stallTimeoutMs);
         Active = Attempted = true;
         _started = _lastProgress = now;
         _bestDistance = distance;
@@ -21,8 +24,8 @@ internal sealed class GroundShortcut {
     }
     public GroundShortcutAction Update(long now, float distance, bool canJump) {
         if (distance < _bestDistance - 0.2f) { _bestDistance = distance; _lastProgress = now; }
-        if (now - _started >= 6000) { Cancel(); return GroundShortcutAction.Fallback; }
-        if (now - _lastProgress >= (_jumped ? 1500 : 1200)) {
+        if (now - _started >= _maximumDurationMs) { Cancel(); return GroundShortcutAction.Fallback; }
+        if (now - _lastProgress >= (_jumped ? 1500 : _stallTimeoutMs)) {
             if (!_jumped && canJump) { _jumped = true; _lastProgress = now; return GroundShortcutAction.Jump; }
             Cancel();
             return GroundShortcutAction.Fallback;

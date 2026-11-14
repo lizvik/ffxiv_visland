@@ -22,6 +22,7 @@ public static class FavourIntegration {
     public static readonly int[] FavourTargets = [8, 6, 8]; // 4h / 6h / 8h
 
     public static WorkshopSolver.Recs Apply(WorkshopSolver.Recs baseRecs, FavourMode mode, WorkshopSolver.FavourState favours, ExcelSheet<MJICraftworksObject> sheet, IEnumerable<int>? ocRestCycles = null) {
+        baseRecs = WorkshopUtils.RecalculateRecipes(baseRecs);
         if (mode == FavourMode.None)
             return Clone(baseRecs);
 
@@ -152,7 +153,7 @@ public static class FavourIntegration {
                 for (var f = 0; f < favourIds.Length; ++f) {
                     if (complete[f] >= FavourTargets[f])
                         continue;
-                    if (!TryRow(sheet, favourIds[f], out var favour))
+                    if (!TryRow(sheet, favourIds[f], out var favour) || !WorkshopUtils.IsRecipeUnlocked(favour))
                         continue;
                     if (favour.CraftingTime != current.CraftingTime)
                         continue;
@@ -161,6 +162,10 @@ public static class FavourIntegration {
 
                     MJICraftworksObject? prev = i > 0 && TryRow(sheet, workshop.Slots[i - 1].CraftObjectId, out var p) ? p : null;
                     MJICraftworksObject? next = i + 1 < workshop.Slots.Count && TryRow(sheet, workshop.Slots[i + 1].CraftObjectId, out var n) ? n : null;
+                    if (prev != null && workshop.Slots[i - 1].Slot + prev.Value.CraftingTime != workshop.Slots[i].Slot)
+                        prev = null;
+                    if (next != null && workshop.Slots[i].Slot + current.CraftingTime != workshop.Slots[i + 1].Slot)
+                        next = null;
 
                     var oldPrevLink = prev != null && WorkshopSolver.IsLinked(prev.Value, current);
                     var oldNextLink = next != null && WorkshopSolver.IsLinked(current, next.Value);
@@ -197,13 +202,17 @@ public static class FavourIntegration {
 
     public static void CreditWorkshop(WorkshopSolver.WorkshopRec workshop, uint[] favourIds, int[] complete, ExcelSheet<MJICraftworksObject> sheet) {
         MJICraftworksObject? prev = null;
+        var previousEndHour = -1;
         foreach (var slot in workshop.Slots) {
             if (!TryRow(sheet, slot.CraftObjectId, out var row))
                 continue;
+            if (slot.Slot != previousEndHour)
+                prev = null;
             var idx = Array.IndexOf(favourIds, row.RowId);
             if (idx >= 0)
                 complete[idx] += prev != null && WorkshopSolver.IsLinked(prev.Value, row) ? 2 : 1;
             prev = row;
+            previousEndHour = slot.Slot + row.CraftingTime;
         }
     }
 
@@ -213,13 +222,17 @@ public static class FavourIntegration {
     private static float EstimateWorkshopValue(WorkshopSolver.WorkshopRec workshop, WorkshopSolver.Popularity pop, ExcelSheet<MJICraftworksObject> sheet) {
         float total = 0;
         MJICraftworksObject? prev = null;
+        var previousEndHour = -1;
         foreach (var slot in workshop.Slots) {
             if (!TryRow(sheet, slot.CraftObjectId, out var row))
                 continue;
+            if (slot.Slot != previousEndHour)
+                prev = null;
             var mult = pop.Multiplier(row.RowId);
             var efficiency = prev != null && WorkshopSolver.IsLinked(prev.Value, row) ? 2f : 1f;
             total += row.Value * mult * efficiency;
             prev = row;
+            previousEndHour = slot.Slot + row.CraftingTime;
         }
         return total;
     }

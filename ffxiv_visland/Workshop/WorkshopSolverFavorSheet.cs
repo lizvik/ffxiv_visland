@@ -23,6 +23,9 @@ public class WorkshopSolverFavourSheet {
             throw new Exception("Invalid state");
         Favours = [.. state.CraftObjectIds.Select(i => MJICraftworksObject.Get().GetRow(i))];
 
+        if (Favours.Any(recipe => !WorkshopUtils.IsRecipeUnlocked(recipe)))
+            throw new Exception(Localization.GetText(LocalizationKeys.Workshop.FavourRecipeUnavailable));
+
         Complete = [.. state.CompletedCounts];
         Links = [.. Favours.Select(BuildLinks)];
         Recs = [];

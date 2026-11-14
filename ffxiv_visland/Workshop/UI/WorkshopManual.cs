@@ -30,6 +30,8 @@ public class WorkshopManual {
     }
 
     private void DrawRowCraft(MJICraftworksObject row, bool fromRecent) {
+        if (!WorkshopUtils.IsRecipeUnlocked(row))
+            return;
         var name = row.Item.Value.Name.ToString() ?? "???";
         ImGui.PushID((int)row.RowId * 2 + (fromRecent ? 1 : 0));
         if (ImGui.Button("+1"))
@@ -55,6 +57,8 @@ public class WorkshopManual {
     }
 
     private void AddToSchedule(MJICraftworksObject row, int workshopIndices) {
+        if (!WorkshopUtils.IsRecipeUnlocked(row))
+            return;
         for (var i = 0; i < 4; ++i)
             if ((workshopIndices & 1 << i) != 0)
                 AddToScheduleSingle(row, i);

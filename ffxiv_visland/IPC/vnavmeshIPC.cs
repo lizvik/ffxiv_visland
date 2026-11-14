@@ -1,4 +1,5 @@
 using Dalamud.Plugin.Ipc;
+using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Threading.Tasks;
@@ -18,6 +19,7 @@ public class NavmeshIPC {
     private readonly ICallGateSubscriber<bool> _navIsAutoLoad;
     private readonly ICallGateSubscriber<bool, object> _navSetAutoLoad;
     private readonly ICallGateSubscriber<Vector3, float, float, Vector3?> _queryMeshNearestPoint;
+    private readonly ICallGateSubscriber<Vector3, float, bool, bool> _queryMeshIsPointOnMesh;
     private readonly ICallGateSubscriber<Vector3, bool, float, Vector3?> _queryMeshPointOnFloor;
     private readonly ICallGateSubscriber<List<Vector3>, bool, object> _pathMoveTo;
     private readonly ICallGateSubscriber<object> _pathStop;
@@ -42,6 +44,7 @@ public class NavmeshIPC {
         _navPathfindCancelable = Service.Interface.GetIpcSubscriber<Vector3, Vector3, bool, CancellationToken, Task<List<Vector3>>>($"{Name}.Nav.PathfindCancelable");
         _navIsAutoLoad = Service.Interface.GetIpcSubscriber<bool>($"{Name}.Nav.IsAutoLoad");
         _navSetAutoLoad = Service.Interface.GetIpcSubscriber<bool, object>($"{Name}.Nav.SetAutoLoad");
+        _queryMeshIsPointOnMesh = Service.Interface.GetIpcSubscriber<Vector3, float, bool, bool>($"{Name}.Query.Mesh.IsPointOnMesh");
         _queryMeshNearestPoint = Service.Interface.GetIpcSubscriber<Vector3, float, float, Vector3?>($"{Name}.Query.Mesh.NearestPoint");
         _queryMeshPointOnFloor = Service.Interface.GetIpcSubscriber<Vector3, bool, float, Vector3?>($"{Name}.Query.Mesh.PointOnFloor");
         _pathMoveTo = Service.Interface.GetIpcSubscriber<List<Vector3>, bool, object>($"{Name}.Path.MoveTo");
@@ -71,6 +74,18 @@ public class NavmeshIPC {
         => _navPathfindCancelable.HasFunction ? _navPathfindCancelable.InvokeFunc(from, to, true, cancellation) : Pathfind(from, to, true);
     public bool IsAutoLoad() => _navIsAutoLoad.HasFunction && _navIsAutoLoad.InvokeFunc();
     public void SetAutoLoad(bool value) { if (_navSetAutoLoad.HasAction) _navSetAutoLoad.InvokeAction(value); }
+
+    public bool IsPointOnMesh(Vector3 position) {
+        if (_queryMeshIsPointOnMesh.HasFunction)
+            return _queryMeshIsPointOnMesh.InvokeFunc(position, 5, true);
+        // Older versions only expose nearest-point queries: require a point under the character,
+        // rather than accepting any polygon somewhere inside a wide search box.
+        var nearest = QueryMeshNearestPoint(position, 0.1f, 5);
+        return nearest.HasValue && float.IsFinite(nearest.Value.X) && float.IsFinite(nearest.Value.Y)
+            && float.IsFinite(nearest.Value.Z)
+            && Vector2.DistanceSquared(new(position.X, position.Z), new(nearest.Value.X, nearest.Value.Z)) <= 0.01f
+            && Math.Abs(position.Y - nearest.Value.Y) <= 5;
+    }
 
     public Vector3? QueryMeshNearestPoint(Vector3 pos, float halfExtentXZ, float halfExtentY)
         => _queryMeshNearestPoint.HasFunction ? _queryMeshNearestPoint.InvokeFunc(pos, halfExtentXZ, halfExtentY) : null;
