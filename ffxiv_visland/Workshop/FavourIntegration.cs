@@ -1,3 +1,4 @@
+using visland.Helpers;
 using Lumina.Excel;
 using Lumina.Excel.Sheets;
 using System;
@@ -9,11 +10,11 @@ namespace visland.Workshop;
 
 public enum FavourMode {
     None = 0,
-    [Description("Keep workshops 1-3, fill 4 with favours")]
+    [Description(LocalizationKeys.Workshop.FavourModeReplaceFourth)]
     ReplaceWorkshop4 = 1,
-    [Description("Try to keep high-value crafts, try same-duration substitutions, sacrifice lowest-value days/workshops")]
+    [Description(LocalizationKeys.Workshop.FavourModeMinMax)]
     MinMax = 2,
-    [Description("MinMax but use the second rest day for most of the favours")]
+    [Description(LocalizationKeys.Workshop.FavourModeFreeRestDay)]
     MinMaxFreeRestDay = 3,
 }
 

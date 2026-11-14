@@ -50,16 +50,16 @@ public unsafe class WorkshopOCImport {
         ImGui.TextUnformatted($"This week → Season {thisSeason}" + (_seasonDB.TryGet(thisSeason, out var cur) ? $" ({cur.Date})" : " (missing)"));
         ImGui.TextUnformatted($"Next week → Season {nextSeason}" + (_seasonDB.TryGet(nextSeason, out var nxt) ? $" ({nxt.Date})" : " (missing)"));
 
-        if (ImGui.Button(L.Label("Load This Week")))
+        if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Workshop.LoadThisWeek, "Load This Week")))
             LoadSeasonRecs(false);
         ImGui.SameLine();
-        if (ImGui.Button(L.Label("Load Next Week")))
+        if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Workshop.LoadNextWeek, "Load Next Week")))
             LoadSeasonRecs(true);
-        ImGuiComponents.HelpMarker(L.Text("Loads Overseas Casuals archive recommendations for the mapped season, then applies the favour mode from Settings."));
+        ImGuiComponents.HelpMarker(Localization.GetText(LocalizationKeys.Workshop.LoadArchiveHelp));
 
-        if (ImGui.Button(L.Label("Import Recommendations From Clipboard")))
+        if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Workshop.ImportRecommendationsFromClipboard, "Import Recommendations From Clipboard")))
             ImportRecsFromClipboard(false);
-        ImGuiComponents.HelpMarker(L.Text("Legacy importer for schedules copied from Discord.\nThe importer detects item names (without \"Isleworks\" et al) on each line.\nYou can copy an entire workshop schedule from discord, junk included."));
+        ImGuiComponents.HelpMarker(Localization.GetText(LocalizationKeys.Workshop.ClipboardImportHelp));
 
         if (Recommendations.Empty)
             return;
@@ -70,10 +70,10 @@ public unsafe class WorkshopOCImport {
         ImGui.Separator();
 
         if (_config.UseFavourSolver) {
-            ImGui.TextUnformatted(L.Text("Advanced favour overrides"));
-            ImGuiComponents.HelpMarker(L.Text("Manual overrides for the currently loaded schedule. Archive loads already apply the favour mode from Settings."));
+            ImGui.TextUnformatted(Localization.GetText(LocalizationKeys.Workshop.AdvancedFavourOverrides));
+            ImGuiComponents.HelpMarker(Localization.GetText(LocalizationKeys.Workshop.ManualOverrideHelp));
 
-            ImGui.TextV(L.Text("Override 4th workshop with favours:"));
+            ImGui.TextV(Localization.GetText(LocalizationKeys.Workshop.Override4thWorkshopWithFavours));
             ImGui.SameLine();
             if (ImGui.Button($"This Week##4th"))
                 OverrideSideRecsLastWorkshopSolver(false);
@@ -81,7 +81,7 @@ public unsafe class WorkshopOCImport {
             if (ImGui.Button($"Next Week##4th"))
                 OverrideSideRecsLastWorkshopSolver(true);
 
-            ImGui.TextV(L.Text("Override closest workshops with favours:"));
+            ImGui.TextV(Localization.GetText(LocalizationKeys.Workshop.OverrideClosestWorkshopsWithFavours));
             ImGui.SameLine();
             if (ImGui.Button($"This Week##asap"))
                 OverrideSideRecsAsapSolver(false);
@@ -89,9 +89,9 @@ public unsafe class WorkshopOCImport {
             if (ImGui.Button($"Next Week##asap"))
                 OverrideSideRecsAsapSolver(true);
 
-            if (ImGui.Button(L.Label("Override 4th workshop from clipboard")))
+            if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Workshop.Override4thWorkshopFromClipboard, "Override 4th workshop from clipboard")))
                 OverrideSideRecsLastWorkshopClipboard();
-            if (ImGui.Button(L.Label("Override closest workshops from clipboard")))
+            if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Workshop.OverrideClosestWorkshopsFromClipboard, "Override closest workshops from clipboard")))
                 OverrideSideRecsAsapClipboard();
 
             if (ImGuiComponents.IconButtonWithText(Dalamud.Interface.FontAwesomeIcon.Clipboard, "Copy /favors (this week)")) {
@@ -115,16 +115,16 @@ public unsafe class WorkshopOCImport {
             ImGui.Separator();
         }
 
-        ImGui.TextV(L.Text("Set Schedule:"));
+        ImGui.TextV(Localization.GetText(LocalizationKeys.Workshop.SetSchedule));
         ImGui.SameLine();
-        if (ImGui.Button(L.Label("This Week")))
+        if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Common.ThisWeek, "This Week")))
             ApplyRecommendations(false);
         ImGui.SameLine();
-        if (ImGui.Button(L.Label("Next Week")))
+        if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Common.NextWeek, "Next Week")))
             ApplyRecommendations(true);
         ImGui.SameLine();
         var ignoreFourth = _applier.IgnoreFourthWorkshop;
-        if (ImGui.Checkbox(L.Label("Ignore 4th Workshop"), ref ignoreFourth))
+        if (ImGui.Checkbox(Localization.GetLabel(LocalizationKeys.Workshop.Ignore4thWorkshop, "Ignore 4th Workshop"), ref ignoreFourth))
             _applier.IgnoreFourthWorkshop = ignoreFourth;
         ImGui.Separator();
 

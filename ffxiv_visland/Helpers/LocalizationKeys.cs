@@ -1,0 +1,185 @@
+namespace visland.Helpers;
+
+// Stable resource keys. Change display text in Localization/*.json, not these identifiers.
+public static class LocalizationKeys {
+    public static class Common {
+        public const string Apply = "Common.Apply";
+        public const string ApplyAll = "Common.ApplyAll";
+        public const string AutoCollect = "Common.AutoCollect";
+        public const string Collect = "Common.Collect";
+        public const string CollectAll = "Common.CollectAll";
+        public const string CollectAllowOvercap = "Common.CollectAllowOvercap";
+        public const string CollectDismiss = "Common.CollectDismiss";
+        public const string CollectWithoutOvercap = "Common.CollectWithoutOvercap";
+        public const string Debug = "Common.Debug";
+        public const string Delete = "Common.Delete";
+        public const string Dismiss = "Common.Dismiss";
+        public const string DismissAll = "Common.DismissAll";
+        public const string Entrust = "Common.Entrust";
+        public const string EntrustAll = "Common.EntrustAll";
+        public const string Filter = "Common.Filter";
+        public const string HoldShift = "Common.HoldShift";
+        public const string InventoryFull = "Common.InventoryFull";
+        public const string Main = "Common.Main";
+        public const string MammetsNotAvailable = "Common.MammetsNotAvailable";
+        public const string Manual = "Common.Manual";
+        public const string MoveDown = "Common.MoveDown";
+        public const string MoveUp = "Common.MoveUp";
+        public const string Next = "Common.Next";
+        public const string NextWeek = "Common.NextWeek";
+        public const string NothingToCollect = "Common.NothingToCollect";
+        public const string Operations = "Common.Operations";
+        public const string OvercapWarning = "Common.OvercapWarning";
+        public const string Prev = "Common.Prev";
+        public const string Settings = "Common.Settings";
+        public const string Slot = "Common.Slot";
+        public const string This = "Common.This";
+        public const string ThisWeek = "Common.ThisWeek";
+        public const string WorkInProgress = "Common.WorkInProgress";
+    }
+
+    public static class Export {
+        public const string AutoExport = "Export.AutoExport";
+        public const string SellEverythingAboveConfiguredLimits = "Export.SellEverythingAboveConfiguredLimits";
+        public const string SellFarmAbove = "Export.SellFarmAbove";
+        public const string SellGranaryAbove = "Export.SellGranaryAbove";
+        public const string SellNormalAbove = "Export.SellNormalAbove";
+        public const string SellPastureAbove = "Export.SellPastureAbove";
+    }
+
+    public static class Gathering {
+        public const string AddRemoveTargetFromWaypoint = "Gathering.AddRemoveTargetFromWaypoint";
+        public const string AddWaypointCurrentPosition = "Gathering.AddWaypointCurrentPosition";
+        public const string AddWaypointInteractWithTarget = "Gathering.AddWaypointInteractWithTarget";
+        public const string AllowFlight = "Gathering.AllowFlight";
+        public const string AutoEnableIslandSanctuaryGatherMode = "Gathering.AutoEnableIslandSanctuaryGatherMode";
+        public const string AutomaticMovementHeading = "Gathering.AutomaticMovementHeading";
+        public const string AutomaticMovementHelp = "Gathering.AutomaticMovementHelp";
+        public const string CreateANewRoute = "Gathering.CreateANewRoute";
+        public const string DefaultInteractionRadius = "Gathering.DefaultInteractionRadius";
+        public const string DefaultWaypointRadius = "Gathering.DefaultWaypointRadius";
+        public const string DeleteRouteHoldCtrl = "Gathering.DeleteRouteHoldCtrl";
+        public const string EditingOptionsHeading = "Gathering.EditingOptionsHeading";
+        public const string EnableRapidImport = "Gathering.EnableRapidImport";
+        public const string ExecuteFromHereLoop = "Gathering.ExecuteFromHereLoop";
+        public const string ExecuteFromHereOnce = "Gathering.ExecuteFromHereOnce";
+        public const string ExecuteSingleStep = "Gathering.ExecuteSingleStep";
+        public const string ExportRoute = "Gathering.ExportRoute";
+        public const string FlightDistance = "Gathering.FlightDistance";
+        public const string GatherModeHelp = "Gathering.GatherModeHelp";
+        public const string GroundShortcuts = "Gathering.GroundShortcuts";
+        public const string GroundShortcutsHelp = "Gathering.GroundShortcutsHelp";
+        public const string Group = "Gathering.Group";
+        public const string ImportRouteFromClipboard = "Gathering.ImportRouteFromClipboard";
+        public const string InsertStepAbove = "Gathering.InsertStepAbove";
+        public const string InsertStepBelow = "Gathering.InsertStepBelow";
+        public const string InteractionType = "Gathering.InteractionType";
+        public const string InteractionTypeLabel = "Gathering.InteractionTypeLabel";
+        public const string IslandOnlyHelp = "Gathering.IslandOnlyHelp";
+        public const string IslandRouteRequired = "Gathering.IslandRouteRequired";
+        public const string LandingFailed = "Gathering.LandingFailed";
+        public const string LoopRoute = "Gathering.LoopRoute";
+        public const string Mount = "Gathering.Mount";
+        public const string MountDistance = "Gathering.MountDistance";
+        public const string MountRoulette = "Gathering.MountRoulette";
+        public const string Name = "Gathering.Name";
+        public const string NavigationRetryHelp = "Gathering.NavigationRetryHelp";
+        public const string NavigationRetryLimit = "Gathering.NavigationRetryLimit";
+        public const string NavmeshHelp = "Gathering.NavmeshHelp";
+        public const string NavmeshRequired = "Gathering.NavmeshRequired";
+        public const string NoDetourAvailable = "Gathering.NoDetourAvailable";
+        public const string NodeMaterialsFull = "Gathering.NodeMaterialsFull";
+        public const string OperationOptionsHeading = "Gathering.OperationOptionsHeading";
+        public const string PauseRoute = "Gathering.PauseRoute";
+        public const string PreserveWaypointOrderHelp = "Gathering.PreserveWaypointOrderHelp";
+        public const string Radius = "Gathering.Radius";
+        public const string RadiusYalms = "Gathering.RadiusYalms";
+        public const string RapidImportHelp = "Gathering.RapidImportHelp";
+        public const string ResumeRoute = "Gathering.ResumeRoute";
+        public const string RouteName = "Gathering.RouteName";
+        public const string RouteNotRunning = "Gathering.RouteNotRunning";
+        public const string RouteStepFormat = "Gathering.RouteStepFormat";
+        public const string Routes = "Gathering.Routes";
+        public const string Search = "Gathering.Search";
+        public const string SetPositionToCurrent = "Gathering.SetPositionToCurrent";
+        public const string StartRoute = "Gathering.StartRoute";
+        public const string StateFormat = "Gathering.StateFormat";
+        public const string Status = "Gathering.Status";
+        public const string StatusPaused = "Gathering.StatusPaused";
+        public const string StatusRunning = "Gathering.StatusRunning";
+        public const string StatusWaiting = "Gathering.StatusWaiting";
+        public const string StopOnInventoryFull = "Gathering.StopOnInventoryFull";
+        public const string StopOnInventoryFullHelp = "Gathering.StopOnInventoryFullHelp";
+        public const string StopRoute = "Gathering.StopRoute";
+        public const string StuckDetectionHelp = "Gathering.StuckDetectionHelp";
+        public const string StuckTimeoutSeconds = "Gathering.StuckTimeoutSeconds";
+        public const string SwapToInteractWaypoint = "Gathering.SwapToInteractWaypoint";
+        public const string SwapToNormalWaypoint = "Gathering.SwapToNormalWaypoint";
+        public const string ToggleInteractions = "Gathering.ToggleInteractions";
+        public const string ToggleWaits = "Gathering.ToggleWaits";
+        public const string TryingDetour = "Gathering.TryingDetour";
+        public const string WaitForCondition = "Gathering.WaitForCondition";
+        public const string WaitMillisecondsFormat = "Gathering.WaitMillisecondsFormat";
+        public const string WaitMs = "Gathering.WaitMs";
+    }
+
+    public static class Granary {
+        public const string AutoReassign = "Granary.AutoReassign";
+        public const string Expedition = "Granary.Expedition";
+        public const string ExtendSameDestination = "Granary.ExtendSameDestination";
+        public const string Granary1 = "Granary.Granary1";
+        public const string Granary2 = "Granary.Granary2";
+        public const string Max = "Granary.Max";
+        public const string Reassign = "Granary.Reassign";
+        public const string ReassignBothToLowestStock = "Granary.ReassignBothToLowestStock";
+        public const string ReassignToTwoLowestStocks = "Granary.ReassignToTwoLowestStocks";
+    }
+
+    public static class Settings {
+        public const string Language = "Settings.Language";
+        public const string SystemLanguage = "Settings.SystemLanguage";
+    }
+
+    public static class Windows {
+        public const string ExportTitle = "Windows.ExportTitle";
+        public const string FarmTitle = "Windows.FarmTitle";
+        public const string GatheringTitle = "Windows.GatheringTitle";
+        public const string GranaryTitle = "Windows.GranaryTitle";
+        public const string PastureTitle = "Windows.PastureTitle";
+        public const string WorkshopTitle = "Windows.WorkshopTitle";
+    }
+
+    public static class Workshop {
+        public const string AdvancedFavourHelp = "Workshop.AdvancedFavourHelp";
+        public const string AdvancedFavourOverrides = "Workshop.AdvancedFavourOverrides";
+        public const string AutoLoadArchive = "Workshop.AutoLoadArchive";
+        public const string AutoSelectNextCycle = "Workshop.AutoSelectNextCycle";
+        public const string ClearCurrentCycle = "Workshop.ClearCurrentCycle";
+        public const string ClipboardImportHelp = "Workshop.ClipboardImportHelp";
+        public const string FavourIntegration = "Workshop.FavourIntegration";
+        public const string FavourModeFreeRestDay = "Workshop.FavourModeFreeRestDay";
+        public const string FavourModeMinMax = "Workshop.FavourModeMinMax";
+        public const string FavourModeReplaceFourth = "Workshop.FavourModeReplaceFourth";
+        public const string FetchDemand = "Workshop.FetchDemand";
+        public const string Ignore4thWorkshop = "Workshop.Ignore4thWorkshop";
+        public const string ImportRecommendationsFromClipboard = "Workshop.ImportRecommendationsFromClipboard";
+        public const string InitFromGameWeek = "Workshop.InitFromGameWeek";
+        public const string LoadArchiveHelp = "Workshop.LoadArchiveHelp";
+        public const string LoadNextWeek = "Workshop.LoadNextWeek";
+        public const string LoadThisWeek = "Workshop.LoadThisWeek";
+        public const string ManualOverrideHelp = "Workshop.ManualOverrideHelp";
+        public const string ManualSchedule = "Workshop.ManualSchedule";
+        public const string Override4thWorkshopFromClipboard = "Workshop.Override4thWorkshopFromClipboard";
+        public const string Override4thWorkshopWithFavours = "Workshop.Override4thWorkshopWithFavours";
+        public const string OverrideClosestWorkshopsFromClipboard = "Workshop.OverrideClosestWorkshopsFromClipboard";
+        public const string OverrideClosestWorkshopsWithFavours = "Workshop.OverrideClosestWorkshopsWithFavours";
+        public const string RecentItems = "Workshop.RecentItems";
+        public const string RefreshFavoursDemand = "Workshop.RefreshFavoursDemand";
+        public const string Schedule = "Workshop.Schedule";
+        public const string SetSchedule = "Workshop.SetSchedule";
+        public const string ShowAdvancedFavourOverrideControls = "Workshop.ShowAdvancedFavourOverrideControls";
+        public const string Solve = "Workshop.Solve";
+        public const string Void2ndRestThisWeek = "Workshop.Void2ndRestThisWeek";
+    }
+
+}

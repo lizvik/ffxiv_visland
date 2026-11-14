@@ -59,7 +59,7 @@ public class GatherRouteDB : Configuration.Node {
     public bool GatherModeOnStart = true;
     public bool StopOnInventoryFull;
 
-    public bool OptimizeRoutes = true;
+    public bool GroundShortcuts = true;
     public uint MountId;
     public bool AllowFlight = true;
     public float MountDistance = 20;
@@ -88,11 +88,12 @@ public class GatherRouteDB : Configuration.Node {
         AllowFlight = (bool?)j["AllowFlight"] ?? true;
         MountDistance = Math.Clamp((float?)j["MountDistance"] ?? 20, 5, 100);
         FlightDistance = Math.Clamp((float?)j["FlightDistance"] ?? 40, MountDistance, 200);
-        OptimizeRoutes = (bool?)j["OptimizeRoutes"] ?? true;
+        GroundShortcuts = (bool?)j["GroundShortcuts"] ?? true;
         StopOnInventoryFull = (bool?)j["StopOnInventoryFull"] ?? (bool?)j["DisableOnErrors"] ?? false;
         GatherModeOnStart = (bool?)j["GatherModeOnStart"] ?? true;
         DefaultWaypointRadius = (float?)j["DefaultWaypointRadius"] ?? 3;
         DefaultInteractionRadius = (float?)j["DefaultInteractionRadius"] ?? 2;
+        // OptimizeRoutes is obsolete: waypoint order is always preserved.
         // Intentionally ignore obsolete extras (Food, GlobalFood, ExtractMateria, RepairGear,
         // RepairPercent, Desynth, AutoRetainerIntegration) and legacy keys: Manual, GlobalManual, WasFlyingInManual,
         // LandDistance, PathFindCancellationTime, EmoteID, ActionID, ItemID, MobID, QuestID, ChatCommand, etc.
@@ -109,7 +110,7 @@ public class GatherRouteDB : Configuration.Node {
         }
         return new JObject {
             { "Routes", res },
-            { "OptimizeRoutes", OptimizeRoutes },
+            { "GroundShortcuts", GroundShortcuts },
             { "MountId", MountId },
             { "AllowFlight", AllowFlight },
             { "MountDistance", MountDistance },

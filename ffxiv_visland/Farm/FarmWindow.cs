@@ -11,7 +11,7 @@ public unsafe class FarmWindow : UIAttachedWindow {
     private readonly FarmConfig _config;
     private readonly FarmDebug _debug = new();
 
-    public FarmWindow() : base(L.Label("Farm Automation"), "MJIFarmManagement", new(400, 600)) {
+    public FarmWindow() : base(Localization.GetLabel(LocalizationKeys.Windows.FarmTitle, "Farm Automation"), "MJIFarmManagement", new(400, 600)) {
         _config = Service.Config.Get<FarmConfig>();
     }
 
@@ -25,27 +25,27 @@ public unsafe class FarmWindow : UIAttachedWindow {
     }
 
     public override void Draw() {
-        WindowName = L.Label("Farm Automation");
+        WindowName = Localization.GetLabel(LocalizationKeys.Windows.FarmTitle, "Farm Automation");
         using var tabs = ImRaii.TabBar("Tabs");
         if (tabs) {
-            using (var tab = ImRaii.TabItem(L.Label("Main")))
+            using (var tab = ImRaii.TabItem(Localization.GetLabel(LocalizationKeys.Common.Main, "Main")))
                 if (tab)
                     DrawMain();
-            using (var tab = ImRaii.TabItem(L.Label("Debug")))
+            using (var tab = ImRaii.TabItem(Localization.GetLabel(LocalizationKeys.Common.Debug, "Debug")))
                 if (tab)
                     _debug.Draw();
         }
     }
 
     private void DrawMain() {
-        if (UICombo.Enum(L.Label("Auto Collect"), ref _config.Collect))
+        if (UICombo.Enum(Localization.GetLabel(LocalizationKeys.Common.AutoCollect, "Auto Collect"), ref _config.Collect))
             _config.NotifyModified();
         ImGui.Separator();
 
         var mji = MJIManager.Instance();
         var agent = AgentMJIFarmManagement.Instance();
         if (mji == null || mji->FarmState == null || mji->IslandState.Farm.EligibleForCare == 0 || agent == null) {
-            ImGui.TextUnformatted(L.Text("Mammets not available!"));
+            ImGui.TextUnformatted(Localization.GetText(LocalizationKeys.Common.MammetsNotAvailable));
             return;
         }
 
@@ -59,12 +59,12 @@ public unsafe class FarmWindow : UIAttachedWindow {
         if (res != CollectResult.NothingToCollect) {
             // if there's uncollected stuff - propose to collect everything
             using (ImRaii.Disabled(res == CollectResult.EverythingCapped)) {
-                if (ImGui.Button(L.Label("Collect all")))
+                if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Common.CollectAll, "Collect all")))
                     CollectAll();
                 if (res != CollectResult.CanCollectSafely) {
                     ImGui.SameLine();
                     using (ImRaii.PushColor(ImGuiCol.Text, 0xff0000ff))
-                        ImGui.TextV(res == CollectResult.EverythingCapped ? L.Text("Inventory is full!") : L.Text("Warning: some resources will overcap!"));
+                        ImGui.TextV(res == CollectResult.EverythingCapped ? Localization.GetText(LocalizationKeys.Common.InventoryFull) : Localization.GetText(LocalizationKeys.Common.OvercapWarning));
                 }
             }
         }
@@ -78,11 +78,11 @@ public unsafe class FarmWindow : UIAttachedWindow {
             }
 
             using (ImRaii.Disabled(!canDismiss))
-                if (ImGui.Button(L.Label("Dismiss all")))
+                if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Common.DismissAll, "Dismiss all")))
                     DismissAll();
             ImGui.SameLine();
             using (ImRaii.Disabled(!canEntrust))
-                if (ImGui.Button(L.Label("Entrust all")))
+                if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Common.EntrustAll, "Entrust all")))
                     EntrustAll();
         }
     }
@@ -90,8 +90,8 @@ public unsafe class FarmWindow : UIAttachedWindow {
     private void DrawPlotOperations() {
         using var table = ImRaii.Table("table", 2);
         if (table) {
-            ImGui.TableSetupColumn(L.Label("Slot"));
-            ImGui.TableSetupColumn(L.Label("Operations"));
+            ImGui.TableSetupColumn(Localization.GetLabel(LocalizationKeys.Common.Slot, "Slot"));
+            ImGui.TableSetupColumn(Localization.GetLabel(LocalizationKeys.Common.Operations, "Operations"));
             ImGui.TableHeadersRow();
 
             var agent = AgentMJIFarmManagement.Instance();
@@ -110,20 +110,20 @@ public unsafe class FarmWindow : UIAttachedWindow {
                 ImGui.TableNextColumn();
                 if (slot.YieldAvailable > 0) {
                     using (ImRaii.Disabled(full)) {
-                        if (ImGui.Button(L.Label("Collect") + $"_{i}"))
+                        if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Common.Collect, "Collect") + $"_{i}"))
                             CollectOne(i, false);
                         ImGui.SameLine();
-                        if (ImGui.Button(L.Label("Collect & dismiss") + $"_{i}"))
+                        if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Common.CollectDismiss, "Collect & dismiss") + $"_{i}"))
                             CollectOne(i, true);
                     }
                 }
                 else if (slot.UnderCare) {
-                    if (ImGui.Button(L.Label("Dismiss") + $"_{i}"))
+                    if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Common.Dismiss, "Dismiss") + $"_{i}"))
                         DismissOne(i);
                 }
                 else if (slot.SeedItemId != 0) {
                     if (slot.WasUnderCare || Utils.NumCowries() >= 5) {
-                        if (ImGui.Button(L.Label("Entrust") + $"_{i}"))
+                        if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Common.Entrust, "Entrust") + $"_{i}"))
                             EntrustOne(i, slot.SeedItemId);
                     }
                     // else: not enough cowries

@@ -13,7 +13,7 @@ namespace visland.Helpers;
 public static class UICombo {
     public static string EnumString(Enum v) {
         var name = v.ToString();
-        return L.Text(v.GetType().GetField(name)?.GetCustomAttribute<DescriptionAttribute>()?.Description ?? name);
+        return Localization.GetText(v.GetType().GetField(name)?.GetCustomAttribute<DescriptionAttribute>()?.Description ?? name);
     }
 
     public static bool Enum<T>(string label, ref T v) where T : Enum {

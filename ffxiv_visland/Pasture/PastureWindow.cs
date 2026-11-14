@@ -10,7 +10,7 @@ unsafe class PastureWindow : UIAttachedWindow {
     private readonly PastureConfig _config;
     private readonly PastureDebug _debug = new();
 
-    public PastureWindow() : base(L.Label("Pasture Automation"), "MJIAnimalManagement", new(400, 600)) {
+    public PastureWindow() : base(Localization.GetLabel(LocalizationKeys.Windows.PastureTitle, "Pasture Automation"), "MJIAnimalManagement", new(400, 600)) {
         _config = Service.Config.Get<PastureConfig>();
     }
 
@@ -30,27 +30,27 @@ unsafe class PastureWindow : UIAttachedWindow {
     }
 
     public override void Draw() {
-        WindowName = L.Label("Pasture Automation");
+        WindowName = Localization.GetLabel(LocalizationKeys.Windows.PastureTitle, "Pasture Automation");
         using var tabs = ImRaii.TabBar("Tabs");
         if (tabs) {
-            using (var tab = ImRaii.TabItem(L.Label("Main")))
+            using (var tab = ImRaii.TabItem(Localization.GetLabel(LocalizationKeys.Common.Main, "Main")))
                 if (tab)
                     DrawMain();
-            using (var tab = ImRaii.TabItem(L.Label("Debug")))
+            using (var tab = ImRaii.TabItem(Localization.GetLabel(LocalizationKeys.Common.Debug, "Debug")))
                 if (tab)
                     _debug.Draw();
         }
     }
 
     private void DrawMain() {
-        if (UICombo.Enum(L.Label("Auto Collect"), ref _config.Collect))
+        if (UICombo.Enum(Localization.GetLabel(LocalizationKeys.Common.AutoCollect, "Auto Collect"), ref _config.Collect))
             _config.NotifyModified();
         ImGui.Separator();
 
         var mji = MJIManager.Instance();
         var agent = AgentMJIAnimalManagement.Instance();
         if (mji == null || mji->PastureHandler == null || mji->IslandState.Pasture.EligibleForCare == 0 || agent == null) {
-            ImGui.TextUnformatted(L.Text("Mammets not available!"));
+            ImGui.TextUnformatted(Localization.GetText(LocalizationKeys.Common.MammetsNotAvailable));
             return;
         }
 
@@ -62,18 +62,18 @@ unsafe class PastureWindow : UIAttachedWindow {
         if (res != CollectResult.NothingToCollect) {
             // if there's uncollected stuff - propose to collect everything
             using (ImRaii.Disabled(res == CollectResult.EverythingCapped)) {
-                if (ImGui.Button(L.Label("Collect all")))
+                if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Common.CollectAll, "Collect all")))
                     CollectAll();
                 if (res != CollectResult.CanCollectSafely) {
                     ImGui.SameLine();
                     using (ImRaii.PushColor(ImGuiCol.Text, 0xff0000ff))
-                        ImGui.TextV(res == CollectResult.EverythingCapped ? L.Text("Inventory is full!") : L.Text("Warning: some resources will overcap!"));
+                        ImGui.TextV(res == CollectResult.EverythingCapped ? Localization.GetText(LocalizationKeys.Common.InventoryFull) : Localization.GetText(LocalizationKeys.Common.OvercapWarning));
                 }
             }
         }
         else {
             // TODO: think about any other global operations?
-            ImGui.TextV(L.Text("Nothing to collect!"));
+            ImGui.TextV(Localization.GetText(LocalizationKeys.Common.NothingToCollect));
         }
     }
 

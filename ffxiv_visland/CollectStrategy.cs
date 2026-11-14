@@ -1,14 +1,15 @@
-﻿using System.ComponentModel;
+﻿using visland.Helpers;
+using System.ComponentModel;
 
 namespace visland;
 
 public enum CollectStrategy {
-    [Description("Manual")]
+    [Description(LocalizationKeys.Common.Manual)]
     Manual,
 
-    [Description("Automatic, if not overcapping")]
+    [Description(LocalizationKeys.Common.CollectWithoutOvercap)]
     NoOvercap,
 
-    [Description("Automatic, allow overcap")]
+    [Description(LocalizationKeys.Common.CollectAllowOvercap)]
     FullAuto,
 }

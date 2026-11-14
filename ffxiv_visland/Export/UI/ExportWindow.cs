@@ -14,7 +14,7 @@ unsafe class ExportWindow : UIAttachedWindow {
     private readonly ExportDebug _debug = new();
     private readonly Throttle _exportThrottle = new(); // export seems to close & reopen window?..
 
-    public ExportWindow() : base(L.Label("Exports Automation"), "MJIDisposeShop", new(400, 600)) {
+    public ExportWindow() : base(Localization.GetLabel(LocalizationKeys.Windows.ExportTitle, "Exports Automation"), "MJIDisposeShop", new(400, 600)) {
         _config = Service.Config.Get<ExportConfig>();
     }
 
@@ -31,33 +31,33 @@ unsafe class ExportWindow : UIAttachedWindow {
     }
 
     public override void Draw() {
-        WindowName = L.Label("Exports Automation");
+        WindowName = Localization.GetLabel(LocalizationKeys.Windows.ExportTitle, "Exports Automation");
         using var tabs = ImRaii.TabBar("Tabs");
         if (tabs) {
-            using (var tab = ImRaii.TabItem(L.Label("Main")))
+            using (var tab = ImRaii.TabItem(Localization.GetLabel(LocalizationKeys.Common.Main, "Main")))
                 if (tab)
                     DrawMain();
-            using (var tab = ImRaii.TabItem(L.Label("Debug")))
+            using (var tab = ImRaii.TabItem(Localization.GetLabel(LocalizationKeys.Common.Debug, "Debug")))
                 if (tab)
                     _debug.Draw();
         }
     }
 
     private void DrawMain() {
-        if (ImGui.Checkbox(L.Label("Auto Export"), ref _config.AutoSell))
+        if (ImGui.Checkbox(Localization.GetLabel(LocalizationKeys.Export.AutoExport, "Auto Export"), ref _config.AutoSell))
             _config.NotifyModified();
         ImGui.PushItemWidth(150);
-        if (ImGui.SliderInt(L.Label("Sell normal above"), ref _config.NormalLimit, 0, 999))
+        if (ImGui.SliderInt(Localization.GetLabel(LocalizationKeys.Export.SellNormalAbove, "Sell normal above"), ref _config.NormalLimit, 0, 999))
             _config.NotifyModified();
-        if (ImGui.SliderInt(L.Label("Sell granary above"), ref _config.GranaryLimit, 0, 999))
+        if (ImGui.SliderInt(Localization.GetLabel(LocalizationKeys.Export.SellGranaryAbove, "Sell granary above"), ref _config.GranaryLimit, 0, 999))
             _config.NotifyModified();
-        if (ImGui.SliderInt(L.Label("Sell farm above"), ref _config.FarmLimit, 0, 999))
+        if (ImGui.SliderInt(Localization.GetLabel(LocalizationKeys.Export.SellFarmAbove, "Sell farm above"), ref _config.FarmLimit, 0, 999))
             _config.NotifyModified();
-        if (ImGui.SliderInt(L.Label("Sell pasture above"), ref _config.PastureLimit, 0, 999))
+        if (ImGui.SliderInt(Localization.GetLabel(LocalizationKeys.Export.SellPastureAbove, "Sell pasture above"), ref _config.PastureLimit, 0, 999))
             _config.NotifyModified();
         ImGui.PopItemWidth();
 
-        if (ImGui.Button(L.Label("Sell everything above configured limits")))
+        if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Export.SellEverythingAboveConfiguredLimits, "Sell everything above configured limits")))
             AutoExport();
     }
 

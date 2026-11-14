@@ -24,7 +24,6 @@ public class GatherWindow : Window {
 
     public GatherRouteDB RouteDB = null!;
     public GatherRouteExec Exec => Service.RouteExec;
-    public GatherDebug _debug = null!;
 
     private int selectedRouteIndex = -1;
     private static bool loop;
@@ -39,23 +38,22 @@ public class GatherWindow : Window {
     private HashSet<string> _preSearchOpenGroups = [];
     private List<Route> VisibleRoutes => searchString.Length > 0 ? _filteredRoutes : RouteDB.Routes;
     private FontAwesomeIcon PlayIcon => Exec.CurrentRoute != null && !Exec.Paused ? FontAwesomeIcon.Pause : FontAwesomeIcon.Play;
-    private string PlayTooltip => Exec.CurrentRoute == null ? L.Text("Start Route") : Exec.Paused ? L.Text("Resume Route") : L.Text("Pause Route");
+    private string PlayTooltip => Exec.CurrentRoute == null ? Localization.GetText(LocalizationKeys.Gathering.StartRoute) : Exec.Paused ? Localization.GetText(LocalizationKeys.Gathering.ResumeRoute) : Localization.GetText(LocalizationKeys.Gathering.PauseRoute);
 
-    public GatherWindow() : base(L.Label("Gathering Automation"), ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse) {
+    public GatherWindow() : base(Localization.GetLabel(LocalizationKeys.Windows.GatheringTitle, "Gathering Automation"), ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse) {
         Size = new Vector2(800, 800);
         SizeCondition = ImGuiCond.FirstUseEver;
         RouteDB = Service.Config.Get<GatherRouteDB>();
 
-        _debug = new();
     }
 
     public override void Draw() {
-        WindowName = L.Label("Gathering Automation");
+        WindowName = Localization.GetLabel(LocalizationKeys.Windows.GatheringTitle, "Gathering Automation");
         using var tabs = ImRaii.TabBar("Tabs");
         if (tabs) {
-            using (var tab = ImRaii.TabItem(L.Label("Routes")))
+            using (var tab = ImRaii.TabItem(Localization.GetLabel(LocalizationKeys.Gathering.Routes, "Routes")))
                 if (tab) {
-                    ImGui.TextWrapped(L.Text("Gathering routes are available only inside Island Sanctuary."));
+                    ImGui.TextWrapped(Localization.GetText(LocalizationKeys.Gathering.IslandOnlyHelp));
                     DrawExecution();
                     ImGui.Separator();
                     ImGui.Spacing();
@@ -72,41 +70,38 @@ public class GatherWindow : Window {
                         a();
                     _postDraw.Clear();
                 }
-            using (var tab = ImRaii.TabItem(L.Label("Settings")))
+            using (var tab = ImRaii.TabItem(Localization.GetLabel(LocalizationKeys.Common.Settings, "Settings")))
                 if (tab)
                     DrawSettings();
-            using (var tab = ImRaii.TabItem(L.Label("Debug")))
-                if (tab)
-                    _debug.Draw();
         }
     }
 
     private void DrawExecution() {
-        ImGui.Text(L.Text("Status: "));
+        ImGui.Text(Localization.GetText(LocalizationKeys.Gathering.Status));
         ImGui.SameLine();
 
         if (Exec.CurrentRoute != null)
-            Utils.FlashText($"{(Exec.Paused ? L.Text("PAUSED") : Exec.Waiting ? L.Text("WAITING") : L.Text("RUNNING"))}", new Vector4(1.0f, 1.0f, 1.0f, 1.0f), Exec.Paused ? new Vector4(1.0f, 0.0f, 0.0f, 1.0f) : new Vector4(0.0f, 1.0f, 0.0f, 1.0f), 2);
+            Utils.FlashText($"{(Exec.Paused ? Localization.GetText(LocalizationKeys.Gathering.StatusPaused) : Exec.Waiting ? Localization.GetText(LocalizationKeys.Gathering.StatusWaiting) : Localization.GetText(LocalizationKeys.Gathering.StatusRunning))}", new Vector4(1.0f, 1.0f, 1.0f, 1.0f), Exec.Paused ? new Vector4(1.0f, 0.0f, 0.0f, 1.0f) : new Vector4(0.0f, 1.0f, 0.0f, 1.0f), 2);
         ImGui.SameLine();
 
         if (Exec.CurrentRoute == null || Exec.CurrentWaypoint >= Exec.CurrentRoute.Waypoints.Count) {
-            ImGui.Text(L.Text("Route not running"));
+            ImGui.Text(Localization.GetText(LocalizationKeys.Gathering.RouteNotRunning));
             return;
         }
 
         if (Exec.CurrentRoute != null) // Finish() call could've reset it
         {
             ImGui.SameLine();
-            ImGui.Text(L.Format("{0}: Step #{1} {2}", Exec.CurrentRoute.Name, Exec.CurrentWaypoint + 1, Exec.CurrentRoute.Waypoints[Exec.CurrentWaypoint].Position));
+            ImGui.Text(Localization.FormatText(LocalizationKeys.Gathering.RouteStepFormat, Exec.CurrentRoute.Name, Exec.CurrentWaypoint + 1, Exec.CurrentRoute.Waypoints[Exec.CurrentWaypoint].Position));
 
             if (Exec.Waiting) {
                 ImGui.SameLine();
-                ImGui.Text(L.Format("waiting {0}ms", Exec.WaitUntil - Environment.TickCount64));
+                ImGui.Text(Localization.FormatText(LocalizationKeys.Gathering.WaitMillisecondsFormat, Exec.WaitUntil - Environment.TickCount64));
             }
         }
 
         ImGui.SameLine();
-        ImGui.Text(L.Format("State: {0}", Exec.CurrentState));
+        ImGui.Text(Localization.FormatText(LocalizationKeys.Gathering.StateFormat, Exec.CurrentState));
     }
 
     private unsafe void DrawSidebar(Vector2 size) {
@@ -116,18 +111,18 @@ public class GatherWindow : Window {
                 RouteDB.NotifyModified();
             }
 
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip(L.Text("Create a New Route"));
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(Localization.GetText(LocalizationKeys.Gathering.CreateANewRoute));
             ImGui.SameLine();
 
             if (ImGuiComponents.IconButton(FontAwesomeIcon.FileImport))
                 TryImport(RouteDB);
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip(L.Text("Import Route from Clipboard"));
+                ImGui.SetTooltip(Localization.GetText(LocalizationKeys.Gathering.ImportRouteFromClipboard));
 
             ImGui.SameLine();
             RapidImport();
 
-            ImGui.TextV(L.Text("Search: "));
+            ImGui.TextV(Localization.GetText(LocalizationKeys.Gathering.Search));
             ImGui.SameLine();
             ImGui.SetNextItemWidth(-1);
             var wasSearching = searchString.Length > 0;
@@ -219,10 +214,10 @@ public class GatherWindow : Window {
 
     internal static bool RapidImportEnabled = false;
     private void RapidImport() {
-        if (ImGui.Checkbox(L.Label("Enable Rapid Import"), ref RapidImportEnabled))
+        if (ImGui.Checkbox(Localization.GetLabel(LocalizationKeys.Gathering.EnableRapidImport, "Enable Rapid Import"), ref RapidImportEnabled))
             ImGui.SetClipboardText("");
 
-        ImGuiComponents.HelpMarker(L.Text("Import multiple presets with ease by simply copying them. Visland will read your clipboard and attempt to import whatever you copy. Your clipboard will be cleared upon enabling."));
+        ImGuiComponents.HelpMarker(Localization.GetText(LocalizationKeys.Gathering.RapidImportHelp));
         if (RapidImportEnabled) {
             try {
                 var text = ImGui.GetClipboardText();
@@ -241,26 +236,24 @@ public class GatherWindow : Window {
         using var child = ImRaii.Child("GatherSettings");
         if (!child) return;
 
-        L.DrawSelector();
+        Localization.DrawLanguageSelector();
         ImGui.Separator();
 
-        Utils.DrawSection(L.Text("Global Route Editing Options"), ImGuiColors.ParsedGold);
-        if (ImGui.SliderFloat(L.Label("Default Waypoint Radius"), ref RouteDB.DefaultWaypointRadius, 0, 100))
+        Utils.DrawSection(Localization.GetText(LocalizationKeys.Gathering.EditingOptionsHeading), ImGuiColors.ParsedGold);
+        if (ImGui.SliderFloat(Localization.GetLabel(LocalizationKeys.Gathering.DefaultWaypointRadius, "Default Waypoint Radius"), ref RouteDB.DefaultWaypointRadius, 0, 100))
             RouteDB.NotifyModified();
-        if (ImGui.SliderFloat(L.Label("Default Interaction Radius"), ref RouteDB.DefaultInteractionRadius, 0, 100))
+        if (ImGui.SliderFloat(Localization.GetLabel(LocalizationKeys.Gathering.DefaultInteractionRadius, "Default Interaction Radius"), ref RouteDB.DefaultInteractionRadius, 0, 100))
             RouteDB.NotifyModified();
 
-        Utils.DrawSection(L.Text("Global Route Operation Options"), ImGuiColors.ParsedGold);
-        ImGui.TextUnformatted(L.Text("Automatic navigation uses vnavmesh."));
-        if (ImGui.Checkbox(L.Label("Automatically optimize gathering routes"), ref RouteDB.OptimizeRoutes))
-            RouteDB.NotifyModified();
-        ImGuiComponents.HelpMarker(L.Text("Optimizes independent gathering stops when starting a full route. Waits and route jumps keep their order. Saved routes are unchanged. Distance estimates use straight lines; vnavmesh handles obstacles during navigation."));
+        Utils.DrawSection(Localization.GetText(LocalizationKeys.Gathering.OperationOptionsHeading), ImGuiColors.ParsedGold);
+        ImGui.TextUnformatted(Localization.GetText(LocalizationKeys.Gathering.NavmeshHelp));
+        ImGui.TextWrapped(Localization.GetText(LocalizationKeys.Gathering.PreserveWaypointOrderHelp));
 
-        ImGui.TextUnformatted(L.Text("Automatic movement"));
-        var mountPreview = RouteDB.MountId == 0 ? L.Text("Mount roulette") : Mount.GetRow(RouteDB.MountId)?.Singular.ToString() ?? L.Text("Mount roulette");
-        using (var mounts = ImRaii.Combo(L.Label("Mount"), mountPreview)) {
+        ImGui.TextUnformatted(Localization.GetText(LocalizationKeys.Gathering.AutomaticMovementHeading));
+        var mountPreview = RouteDB.MountId == 0 ? Localization.GetText(LocalizationKeys.Gathering.MountRoulette) : Mount.GetRow(RouteDB.MountId)?.Singular.ToString() ?? Localization.GetText(LocalizationKeys.Gathering.MountRoulette);
+        using (var mounts = ImRaii.Combo(Localization.GetLabel(LocalizationKeys.Gathering.Mount, "Mount"), mountPreview)) {
             if (mounts) {
-                if (ImGui.Selectable(L.Text("Mount roulette"), RouteDB.MountId == 0)) {
+                if (ImGui.Selectable(Localization.GetText(LocalizationKeys.Gathering.MountRoulette), RouteDB.MountId == 0)) {
                     RouteDB.MountId = 0;
                     RouteDB.NotifyModified();
                 }
@@ -272,40 +265,44 @@ public class GatherWindow : Window {
                 }
             }
         }
-        if (ImGui.Checkbox(L.Label("Allow flight"), ref RouteDB.AllowFlight))
+        if (ImGui.Checkbox(Localization.GetLabel(LocalizationKeys.Gathering.AllowFlight, "Allow flight"), ref RouteDB.AllowFlight))
             RouteDB.NotifyModified();
-        if (ImGui.SliderFloat(L.Label("Mount distance (yalms)"), ref RouteDB.MountDistance, 5, 100)) {
+        if (ImGui.SliderFloat(Localization.GetLabel(LocalizationKeys.Gathering.MountDistance, "Mount distance (yalms)"), ref RouteDB.MountDistance, 5, 100)) {
             RouteDB.MountDistance = Math.Clamp(RouteDB.MountDistance, 5, 100);
             RouteDB.FlightDistance = Math.Max(RouteDB.FlightDistance, RouteDB.MountDistance);
             RouteDB.NotifyModified();
         }
         using (ImRaii.Disabled(!RouteDB.AllowFlight)) {
-            if (ImGui.SliderFloat(L.Label("Flight distance (yalms)"), ref RouteDB.FlightDistance, RouteDB.MountDistance, 200)) {
+            if (ImGui.SliderFloat(Localization.GetLabel(LocalizationKeys.Gathering.FlightDistance, "Flight distance (yalms)"), ref RouteDB.FlightDistance, RouteDB.MountDistance, 200)) {
                 RouteDB.FlightDistance = Math.Clamp(RouteDB.FlightDistance, RouteDB.MountDistance, 200);
                 RouteDB.NotifyModified();
             }
         }
-        ImGuiComponents.HelpMarker(L.Text("Choose walking, riding or flying from the distance to each new target. Default thresholds: 20 and 40 yalms. Movement mode is fixed for that leg. Mounting or takeoff failures fall back to walking or ground riding. Legacy waypoint movement settings are ignored."));
+        ImGuiComponents.HelpMarker(Localization.GetText(LocalizationKeys.Gathering.AutomaticMovementHelp));
 
-        if (ImGui.SliderInt(L.Label("Stuck timeout (seconds)"), ref RouteDB.StuckTimeoutSeconds, 0, 300)) {
+        if (ImGui.Checkbox(Localization.GetLabel(LocalizationKeys.Gathering.GroundShortcuts, "Try short ground shortcuts"), ref RouteDB.GroundShortcuts))
+            RouteDB.NotifyModified();
+        ImGuiComponents.HelpMarker(Localization.GetText(LocalizationKeys.Gathering.GroundShortcutsHelp));
+
+        if (ImGui.SliderInt(Localization.GetLabel(LocalizationKeys.Gathering.StuckTimeoutSeconds, "Stuck timeout (seconds)"), ref RouteDB.StuckTimeoutSeconds, 0, 300)) {
             RouteDB.StuckTimeoutSeconds = Math.Clamp(RouteDB.StuckTimeoutSeconds, 0, 300);
             RouteDB.NotifyModified();
         }
-        ImGuiComponents.HelpMarker(L.Text("After this many seconds without movement, try jumping while navigation continues. If horizontal movement stays below 0.5 yalms for 3 seconds, recalculate the path and use detours after the retry limit. Default: 10 seconds; 0 disables detection. Pauses, gathering and mounting do not count."));
+        ImGuiComponents.HelpMarker(Localization.GetText(LocalizationKeys.Gathering.StuckDetectionHelp));
 
-        if (ImGui.SliderInt(L.Label("Navigation retry limit"), ref RouteDB.StuckMaxRetries, 0, 20)) {
+        if (ImGui.SliderInt(Localization.GetLabel(LocalizationKeys.Gathering.NavigationRetryLimit, "Navigation retry limit"), ref RouteDB.StuckMaxRetries, 0, 20)) {
             RouteDB.StuckMaxRetries = Math.Clamp(RouteDB.StuckMaxRetries, 0, 20);
             RouteDB.NotifyModified();
         }
-        ImGuiComponents.HelpMarker(L.Text("Maximum recalculations per waypoint after getting stuck or navigation failing to start. Default: 3. After retries fail, try a different movement path via nearby intermediate points to the same waypoint. The gathering route and target stay unchanged. Stop if no usable detour remains. 0 tries detours immediately."));
+        ImGuiComponents.HelpMarker(Localization.GetText(LocalizationKeys.Gathering.NavigationRetryHelp));
 
-        if (ImGui.Checkbox(L.Label("Auto Enable Island Sanctuary Gather Mode"), ref RouteDB.GatherModeOnStart))
+        if (ImGui.Checkbox(Localization.GetLabel(LocalizationKeys.Gathering.AutoEnableIslandSanctuaryGatherMode, "Auto Enable Island Sanctuary Gather Mode"), ref RouteDB.GatherModeOnStart))
             RouteDB.NotifyModified();
-        ImGuiComponents.HelpMarker(L.Text("Enables \"Gather Mode\" when on your Island Sanctuary automatically when commencing a route."));
+        ImGuiComponents.HelpMarker(Localization.GetText(LocalizationKeys.Gathering.GatherModeHelp));
 
-        if (ImGui.Checkbox(L.Label("Stop when inventory is full"), ref RouteDB.StopOnInventoryFull))
+        if (ImGui.Checkbox(Localization.GetLabel(LocalizationKeys.Gathering.StopOnInventoryFull, "Stop when inventory is full"), ref RouteDB.StopOnInventoryFull))
             RouteDB.NotifyModified();
-        ImGuiComponents.HelpMarker(L.Text("Stop only when every material currently unlocked for this gathering node is at its carrying limit. Materials locked by island progression or uncrafted tools are excluded. Continue if any available material has room. Unknown nodes do not trigger a stop."));
+        ImGuiComponents.HelpMarker(Localization.GetText(LocalizationKeys.Gathering.StopOnInventoryFullHelp));
 
     }
 
@@ -331,13 +328,13 @@ public class GatherWindow : Window {
             if (ImGuiComponents.IconButton(FontAwesomeIcon.SyncAlt))
                 loop ^= true;
             ImGui.PopStyleColor(2);
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip(L.Text("Loop Route"));
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(Localization.GetText(LocalizationKeys.Gathering.LoopRoute));
             ImGui.SameLine();
 
             if (Exec.CurrentRoute != null) {
                 if (ImGuiComponents.IconButton(FontAwesomeIcon.Stop))
                     Exec.Finish();
-                if (ImGui.IsItemHovered()) ImGui.SetTooltip(L.Text("Stop Route"));
+                if (ImGui.IsItemHovered()) ImGui.SetTooltip(Localization.GetText(LocalizationKeys.Gathering.StopRoute));
                 ImGui.SameLine();
             }
 
@@ -352,14 +349,14 @@ public class GatherWindow : Window {
                     RouteDB.NotifyModified();
                 }
             }
-            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(L.Text("Delete Route (Hold CTRL)"));
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(Localization.GetText(LocalizationKeys.Gathering.DeleteRouteHoldCtrl));
             ImGui.SameLine();
 
             if (ImGuiComponents.IconButton(FontAwesomeIcon.FileExport)) {
                 ImGui.SetClipboardText(JsonConvert.SerializeObject(route));
             }
             if (ImGui.IsItemHovered()) {
-                ImGui.SetTooltip(L.Text("Export Route (\uE052 Base64)"));
+                ImGui.SetTooltip(Localization.GetText(LocalizationKeys.Gathering.ExportRoute));
                 if (ImGui.IsMouseClicked(ImGuiMouseButton.Right))
                     ImGui.SetClipboardText(Utils.ToCompressedBase64(route));
             }
@@ -372,7 +369,7 @@ public class GatherWindow : Window {
             var name = route.Name;
             var group = route.Group;
 
-            ImGui.TextV(L.Text("Name: "));
+            ImGui.TextV(Localization.GetText(LocalizationKeys.Gathering.Name));
             ImGui.SameLine();
             if (ImGui.InputText("##name", ref name, 256)) {
                 route.Name = name;
@@ -387,7 +384,7 @@ public class GatherWindow : Window {
                     RouteDB.NotifyModified();
                 }
             }
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip(L.Text("Add Waypoint: Current Position"));
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(Localization.GetText(LocalizationKeys.Gathering.AddWaypointCurrentPosition));
             ImGui.SameLine();
             if (ImGuiComponents.IconButton(FontAwesomeIcon.UserPlus)) {
                 var target = Service.TargetManager.Target;
@@ -397,9 +394,9 @@ public class GatherWindow : Window {
                     Exec.Start(route, route.Waypoints.Count - 1, false, false);
                 }
             }
-            if (ImGui.IsItemHovered()) ImGui.SetTooltip(L.Text("Add Waypoint: Interact with Target"));
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip(Localization.GetText(LocalizationKeys.Gathering.AddWaypointInteractWithTarget));
 
-            ImGui.TextV(L.Text("Group: "));
+            ImGui.TextV(Localization.GetText(LocalizationKeys.Gathering.Group));
             ImGui.SameLine();
             if (ImGui.InputText("##group", ref group, 256)) {
                 route.Group = group;
@@ -423,16 +420,16 @@ public class GatherWindow : Window {
         if (!popup) return;
 
         Utils.DrawSection("Mass Editing", ImGuiColors.ParsedGold);
-        ImGui.InputFloat(L.Label("Radius"), ref radius);
+        ImGui.InputFloat(Localization.GetLabel(LocalizationKeys.Gathering.Radius, "Radius"), ref radius);
         ImGui.SameLine();
-        if (ImGui.Button(L.Label("Apply All###Radius"))) {
+        if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Common.ApplyAll, "Radius"))) {
             route?.Waypoints.ForEach(x => x.Radius = radius);
             RouteDB.NotifyModified();
         }
 
-        UICombo.Enum(L.Label("Interaction type"), ref interaction);
+        UICombo.Enum(Localization.GetLabel(LocalizationKeys.Gathering.InteractionTypeLabel, "Interaction type"), ref interaction);
         ImGui.SameLine();
-        if (ImGui.Button(L.Label("Apply All###Interaction"))) {
+        if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Common.ApplyAll, "Interaction"))) {
             route?.Waypoints.ForEach(x => x.Interaction = interaction);
             RouteDB.NotifyModified();
         }
@@ -444,12 +441,12 @@ public class GatherWindow : Window {
             wp.ZoneID = Service.ClientState.TerritoryType;
             RouteDB.NotifyModified();
         }
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip(L.Text("Set Position to Current"));
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(Localization.GetText(LocalizationKeys.Gathering.SetPositionToCurrent));
         ImGui.SameLine();
         if (ImGui.InputFloat3("Position", ref wp.Position))
             RouteDB.NotifyModified();
 
-        if (ImGui.InputFloat(L.Label("Radius (yalms)"), ref wp.Radius))
+        if (ImGui.InputFloat(Localization.GetLabel(LocalizationKeys.Gathering.RadiusYalms, "Radius (yalms)"), ref wp.Radius))
             RouteDB.NotifyModified();
 
         if (ImGuiComponents.IconButton(FontAwesomeIcon.UserPlus)) {
@@ -466,28 +463,28 @@ public class GatherWindow : Window {
             else
                 wp.InteractWithOID = default;
         }
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip(L.Text("Add/Remove target from waypoint"));
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(Localization.GetText(LocalizationKeys.Gathering.AddRemoveTargetFromWaypoint));
         ImGui.SameLine();
         if (ImGui.IconButton(FontAwesomeIcon.CommentDots)) {
             wp.showInteractions ^= true;
             RouteDB.NotifyModified();
         }
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip(L.Text("Toggle Interactions"));
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(Localization.GetText(LocalizationKeys.Gathering.ToggleInteractions));
         ImGui.SameLine();
         if (ImGui.IconButton(FontAwesomeIcon.Clock)) {
             wp.showWaits ^= true;
             RouteDB.NotifyModified();
         }
-        if (ImGui.IsItemHovered()) ImGui.SetTooltip(L.Text("Toggle Waits"));
+        if (ImGui.IsItemHovered()) ImGui.SetTooltip(Localization.GetText(LocalizationKeys.Gathering.ToggleWaits));
 
         if (wp.showInteractions) {
-            if (UICombo.Enum(L.Label("Interaction Type"), ref wp.Interaction))
+            if (UICombo.Enum(Localization.GetLabel(LocalizationKeys.Gathering.InteractionType, "Interaction Type"), ref wp.Interaction))
                 RouteDB.NotifyModified();
             switch (wp.Interaction) {
                 case InteractionType.None: break;
                 case InteractionType.Standard: break;
                 case InteractionType.StartRoute:
-                    if (UICombo.String(L.Label("Route Name"), [.. RouteDB.Routes.Select(r => r.Name)], ref wp.RouteName))
+                    if (UICombo.String(Localization.GetLabel(LocalizationKeys.Gathering.RouteName, "Route Name"), [.. RouteDB.Routes.Select(r => r.Name)], ref wp.RouteName))
                         RouteDB.NotifyModified();
                     break;
 
@@ -497,16 +494,16 @@ public class GatherWindow : Window {
         if (wp.showWaits) {
             if (ImGui.InputFloat2("Eorzean Time Wait", ref wp.WaitTimeET))
                 RouteDB.NotifyModified();
-            if (ImGui.SliderInt(L.Label("Wait (ms)"), ref wp.WaitTimeMs, 0, 60000))
+            if (ImGui.SliderInt(Localization.GetLabel(LocalizationKeys.Gathering.WaitMs, "Wait (ms)"), ref wp.WaitTimeMs, 0, 60000))
                 RouteDB.NotifyModified();
-            if (UICombo.Enum(L.Label("Wait for Condition"), ref wp.WaitForCondition))
+            if (UICombo.Enum(Localization.GetLabel(LocalizationKeys.Gathering.WaitForCondition, "Wait for Condition"), ref wp.WaitForCondition))
                 RouteDB.NotifyModified();
         }
     }
 
     private void ContextMenuGroup(string group) {
         var old = group;
-        ImGui.TextV(L.Text("Name: "));
+        ImGui.TextV(Localization.GetText(LocalizationKeys.Gathering.Name));
         ImGui.SameLine();
         if (ImGui.InputText("##groupname", ref group, 256)) {
             RouteDB.Routes.Where(r => r.Group == old).ToList().ForEach(r => r.Group = group);
@@ -515,25 +512,25 @@ public class GatherWindow : Window {
     }
 
     private void ContextMenuWaypoint(Route r, int i) {
-        if (ImGui.MenuItem(L.Label("Execute this step only")))
+        if (ImGui.MenuItem(Localization.GetLabel(LocalizationKeys.Gathering.ExecuteSingleStep, "Execute this step only")))
             Exec.Start(r, i, false, false, r.Waypoints[i].Pathfind);
 
-        if (ImGui.MenuItem(L.Label("Execute route once starting from this step")))
+        if (ImGui.MenuItem(Localization.GetLabel(LocalizationKeys.Gathering.ExecuteFromHereOnce, "Execute route once starting from this step")))
             Exec.Start(r, i, true, false, r.Waypoints[i].Pathfind);
 
-        if (ImGui.MenuItem(L.Label("Execute route starting from this step and then loop")))
+        if (ImGui.MenuItem(Localization.GetLabel(LocalizationKeys.Gathering.ExecuteFromHereLoop, "Execute route starting from this step and then loop")))
             Exec.Start(r, i, true, true, r.Waypoints[i].Pathfind);
 
         var target = Service.TargetManager.Target;
 
-        if (ImGui.MenuItem(L.Label(r.Waypoints[i].InteractWithOID != default ? "Swap to normal waypoint" : "Swap to interact waypoint"))) {
+        if (ImGui.MenuItem(Localization.GetLabel(r.Waypoints[i].InteractWithOID != default ? LocalizationKeys.Gathering.SwapToNormalWaypoint : LocalizationKeys.Gathering.SwapToInteractWaypoint, r.Waypoints[i].InteractWithOID != default ? "Swap to normal waypoint" : "Swap to interact waypoint"))) {
             _postDraw.Add(() => {
                 r.Waypoints[i].InteractWithOID = r.Waypoints[i].InteractWithOID != default ? default : target?.BaseId ?? default;
                 RouteDB.NotifyModified();
             });
         }
 
-        if (ImGui.MenuItem(L.Label("Insert step above"))) {
+        if (ImGui.MenuItem(Localization.GetLabel(LocalizationKeys.Gathering.InsertStepAbove, "Insert step above"))) {
             _postDraw.Add(() => {
                 if (i > 0 && i < r.Waypoints.Count) {
                     if (Exec.SourceRoute == r)
@@ -558,7 +555,7 @@ public class GatherWindow : Window {
             });
         }
 
-        if (ImGui.MenuItem(L.Label("Insert step below"))) {
+        if (ImGui.MenuItem(Localization.GetLabel(LocalizationKeys.Gathering.InsertStepBelow, "Insert step below"))) {
             _postDraw.Add(() => {
                 if (i > 0 && i < r.Waypoints.Count) {
                     if (Exec.SourceRoute == r)
@@ -583,7 +580,7 @@ public class GatherWindow : Window {
             });
         }
 
-        if (ImGui.MenuItem(L.Label("Move up"))) {
+        if (ImGui.MenuItem(Localization.GetLabel(LocalizationKeys.Common.MoveUp, "Move up"))) {
             _postDraw.Add(() => {
                 if (i > 0 && i < r.Waypoints.Count) {
                     if (Exec.SourceRoute == r)
@@ -596,7 +593,7 @@ public class GatherWindow : Window {
             });
         }
 
-        if (ImGui.MenuItem(L.Label("Move down"))) {
+        if (ImGui.MenuItem(Localization.GetLabel(LocalizationKeys.Common.MoveDown, "Move down"))) {
             _postDraw.Add(() => {
                 if (i + 1 < r.Waypoints.Count) {
                     if (Exec.SourceRoute == r)
@@ -609,7 +606,7 @@ public class GatherWindow : Window {
             });
         }
 
-        if (ImGui.MenuItem(L.Label("Delete"))) {
+        if (ImGui.MenuItem(Localization.GetLabel(LocalizationKeys.Common.Delete, "Delete"))) {
             _postDraw.Add(() => {
                 if (i < r.Waypoints.Count) {
                     if (Exec.SourceRoute == r)

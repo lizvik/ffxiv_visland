@@ -21,14 +21,14 @@ public unsafe class WorkshopDebug {
     }
 
     public void Draw() {
-        if (ImGui.Button(L.Label("Clear current cycle")))
+        if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Workshop.ClearCurrentCycle, "Clear current cycle")))
             WorkshopUtils.ClearCurrentCycleSchedule();
         ImGui.SameLine();
-        if (ImGui.Button(L.Label("Refresh favours/demand")))
+        if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Workshop.RefreshFavoursDemand, "Refresh favours/demand")))
             WorkshopUtils.RequestDemandFavours();
 
         ImGui.SameLine();
-        if (ImGui.Button(L.Label("Void 2nd rest (this week)")))
+        if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Workshop.Void2ndRestThisWeek, "Void 2nd rest (this week)")))
             WorkshopUtils.VoidSecondRestThisWeek();
 
         var curWeek = WorkshopUtils.CurrentWeek();
@@ -117,23 +117,23 @@ public unsafe class WorkshopDebug {
             DrawFavourSetup(0, 4, 8);
             DrawFavourSetup(1, 6, 6);
             DrawFavourSetup(2, 8, 8);
-            ImGui.TextV(L.Text("Init from game week:"));
+            ImGui.TextV(Localization.GetText(LocalizationKeys.Workshop.InitFromGameWeek));
             ImGui.SameLine();
-            if (ImGui.Button(L.Label("Fetch demand")))
+            if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Workshop.FetchDemand, "Fetch demand")))
                 WorkshopUtils.RequestDemandFavours();
             ImGui.SameLine();
-            if (ImGui.Button(L.Label("Prev")))
+            if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Common.Prev, "Prev")))
                 InitFavoursFromGame(0, -1);
             using (ImRaii.Disabled(mji->DemandDirty)) {
                 ImGui.SameLine();
-                if (ImGui.Button(L.Label("This")))
+                if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Common.This, "This")))
                     InitFavoursFromGame(3, mji->CurrentPopularity);
                 ImGui.SameLine();
-                if (ImGui.Button(L.Label("Next")))
+                if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Common.Next, "Next")))
                     InitFavoursFromGame(6, mji->NextPopularity);
             }
 
-            if (ImGui.Button(L.Label("Solve!")))
+            if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Workshop.Solve, "Solve!")))
                 _favourSolution = new(_favourState);
 
             if (_favourSolution != null) {

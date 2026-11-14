@@ -11,7 +11,7 @@ unsafe class WorkshopWindow : UIAttachedWindow {
     private readonly WorkshopOCImport _oc = new();
     private readonly WorkshopDebug _debug = new();
 
-    public WorkshopWindow() : base(L.Label("Workshop automation"), "MJICraftSchedule", new(500, 650)) {
+    public WorkshopWindow() : base(Localization.GetLabel(LocalizationKeys.Windows.WorkshopTitle, "Workshop automation"), "MJICraftSchedule", new(500, 650)) {
         _config = Service.Config.Get<WorkshopConfig>();
     }
 
@@ -24,19 +24,19 @@ unsafe class WorkshopWindow : UIAttachedWindow {
     }
 
     public override void Draw() {
-        WindowName = L.Label("Workshop automation");
+        WindowName = Localization.GetLabel(LocalizationKeys.Windows.WorkshopTitle, "Workshop automation");
         using var tabs = ImRaii.TabBar("Tabs");
         if (tabs) {
-            using (var tab = ImRaii.TabItem(L.Label("Schedule")))
+            using (var tab = ImRaii.TabItem(Localization.GetLabel(LocalizationKeys.Workshop.Schedule, "Schedule")))
                 if (tab)
                     _oc.Draw();
-            using (var tab = ImRaii.TabItem(L.Label("Manual schedule")))
+            using (var tab = ImRaii.TabItem(Localization.GetLabel(LocalizationKeys.Workshop.ManualSchedule, "Manual schedule")))
                 if (tab)
                     _manual.Draw();
-            using (var tab = ImRaii.TabItem(L.Label("Settings")))
+            using (var tab = ImRaii.TabItem(Localization.GetLabel(LocalizationKeys.Common.Settings, "Settings")))
                 if (tab)
                     DrawSettings();
-            using (var tab = ImRaii.TabItem(L.Label("Debug")))
+            using (var tab = ImRaii.TabItem(Localization.GetLabel(LocalizationKeys.Common.Debug, "Debug")))
                 if (tab)
                     _debug.Draw();
         }
@@ -53,13 +53,13 @@ unsafe class WorkshopWindow : UIAttachedWindow {
     }
 
     private void DrawSettings() {
-        if (ImGui.Checkbox(L.Label("Automatically select next cycle on open"), ref _config.AutoOpenNextDay))
+        if (ImGui.Checkbox(Localization.GetLabel(LocalizationKeys.Workshop.AutoSelectNextCycle, "Automatically select next cycle on open"), ref _config.AutoOpenNextDay))
             _config.NotifyModified();
-        if (ImGui.Checkbox(L.Label("Automatically load archive recs on open"), ref _config.AutoImport))
+        if (ImGui.Checkbox(Localization.GetLabel(LocalizationKeys.Workshop.AutoLoadArchive, "Automatically load archive recs on open"), ref _config.AutoImport))
             _config.NotifyModified();
 
         ImGui.Separator();
-        ImGui.TextUnformatted(L.Text("Favour integration"));
+        ImGui.TextUnformatted(Localization.GetText(LocalizationKeys.Workshop.FavourIntegration));
         var mode = (int)_config.FavourMode;
         var modes = new[] {
             "None — OC schedule only",
@@ -80,8 +80,8 @@ unsafe class WorkshopWindow : UIAttachedWindow {
         });
 
         ImGui.Separator();
-        if (ImGui.Checkbox(L.Label("Show advanced favour override controls"), ref _config.UseFavourSolver))
+        if (ImGui.Checkbox(Localization.GetLabel(LocalizationKeys.Workshop.ShowAdvancedFavourOverrideControls, "Show advanced favour override controls"), ref _config.UseFavourSolver))
             _config.NotifyModified();
-        ImGui.TextWrapped(L.Text("Shows manual favour-solver / clipboard override buttons on the Schedule tab."));
+        ImGui.TextWrapped(Localization.GetText(LocalizationKeys.Workshop.AdvancedFavourHelp));
     }
 }

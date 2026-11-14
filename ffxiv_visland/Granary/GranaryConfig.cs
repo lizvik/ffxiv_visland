@@ -5,16 +5,16 @@ namespace visland.Granary;
 
 public class GranaryConfig : Configuration.Node {
     public enum UpdateStrategy {
-        [Description("Manual")]
+        [Description(LocalizationKeys.Common.Manual)]
         Manual,
 
-        [Description("Max out, keep same destination")]
+        [Description(LocalizationKeys.Granary.ExtendSameDestination)]
         MaxCurrent,
 
-        [Description("Max out and select expedition bringing rare resources with two lowest counts")]
+        [Description(LocalizationKeys.Granary.ReassignToTwoLowestStocks)]
         BestDifferent,
 
-        [Description("Max out and select expedition bringing rare resource with lowest count in both granaries")]
+        [Description(LocalizationKeys.Granary.ReassignBothToLowestStock)]
         BestSame,
     }
 

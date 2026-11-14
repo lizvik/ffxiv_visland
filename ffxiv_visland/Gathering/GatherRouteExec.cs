@@ -69,6 +69,8 @@ public class GatherRouteExec : IDisposable {
     private bool? _landingDiagnosticPathAccepted;
     private int _landingFloorMisses, _landingPathRequests, _landingPathRejected;
     private bool NavigationFlying => _movementMode == AutomaticMovementMode.Fly && Player.Mounted && Player.InclusiveFlying;
+    private readonly GroundShortcut _groundShortcut = new();
+    private long _nextShortcutMoveAt, _nextShortcutCheckAt;
     private readonly Throttle _interact = new();
 
     public GatherRouteExec() {
@@ -86,27 +88,19 @@ public class GatherRouteExec : IDisposable {
     public void Start(GatherRouteDB.Route route, int waypoint, bool continueToNext, bool loopAtEnd, bool pathfind = false)
     {
         if (!IslandGatheringPolicy.CanRun(Player.Available, Player.IsOnIsland, Player.Territory, route.Waypoints.Select(w => w.ZoneID))) {
-            Service.ChatGui.PrintError(L.Text("Gathering routes can only run inside Island Sanctuary and cannot contain waypoints in other territories."));
+            Service.ChatGui.PrintError(Localization.GetText(LocalizationKeys.Gathering.IslandRouteRequired));
             return;
         }
         if (waypoint < 0 || waypoint >= route.Waypoints.Count)
             return;
         if (!Service.Navmesh.IsEnabled) {
-            Service.ChatGui.PrintError(L.Text("Automatic navigation requires vnavmesh. Please install and enable it."));
+            Service.ChatGui.PrintError(Localization.GetText(LocalizationKeys.Gathering.NavmeshRequired));
             return;
         }
         Finish();
         _recovery.Reset();
         SourceRoute = route;
-        if (RouteDB.OptimizeRoutes && waypoint == 0 && continueToNext) {
-            route = new GatherRouteDB.Route {
-                Name = route.Name, Group = route.Group,
-                Waypoints = RouteOptimizer.Optimize(route.Waypoints, Player.Position, w => w.Position,
-                    w => w.Interaction == GatherRouteDB.InteractionType.Standard && w.InteractWithOID != 0
-                        && w.WaitTimeMs == 0 && w.WaitTimeET == default && w.WaitForCondition == default,
-                    _ => 0, loopAtEnd)
-            };
-        }
+        // Preserve recorded order for every entry point; navigation only optimizes travel to the next waypoint.
         CurrentState = State.None;
         CurrentRoute = route;
         route.Waypoints.RemoveAll(x => x.IsPhantom);
@@ -117,6 +111,7 @@ public class GatherRouteExec : IDisposable {
     }
 
     public void Finish() {
+        _groundShortcut.Reset();
         if (_landingDiagnosticsActive)
             LogLandingDiagnostic("route-stopped", true);
         ResetLanding();
@@ -148,12 +143,12 @@ public class GatherRouteExec : IDisposable {
             return;
         }
         if (CurrentRoute != null && !Service.Navmesh.IsEnabled) {
-            Service.ChatGui.PrintError(L.Text("Automatic navigation requires vnavmesh. Please install and enable it."));
+            Service.ChatGui.PrintError(Localization.GetText(LocalizationKeys.Gathering.NavmeshRequired));
             Finish();
             return;
         }
         if (CurrentRoute != null && Paused) {
-            ResetLanding();
+            _groundShortcut.Cancel();            ResetLanding();
             Service.Navmesh.Stop();
             _navigationRequested = false;
         }
@@ -182,6 +177,8 @@ public class GatherRouteExec : IDisposable {
             ResetLanding();
             ResetLandingDiagnostics();
             _wasFlyingForWaypoint = false;
+            _groundShortcut.Reset();
+            _nextShortcutCheckAt = 0;
             _recoveryWaypoint = CurrentWaypoint;
             _movementMode = AutomaticMovementPolicy.Select(Player.DistanceTo(wp.Position), RouteDB.MountDistance, RouteDB.FlightDistance, RouteDB.AllowFlight);
             _mountAttemptAt = _takeoffAttemptAt = 0;
@@ -216,6 +213,7 @@ public class GatherRouteExec : IDisposable {
                 Service.Log.Information("Jump restored movement; continuing the current path.");
             }
             if (!PrepareMovement()) return;
+            if (TryGroundShortcut(wp)) return;
             if (_detour.Active) {
                 if (!Service.Navmesh.IsReady()) { SetState(State.WaitingForNavmesh); return; }
                 SetState(State.Pathfinding);
@@ -228,7 +226,7 @@ public class GatherRouteExec : IDisposable {
                     Service.Log.Information($"Using alternative movement path to waypoint {CurrentWaypoint + 1}.");
                 }
                 else if (!_detour.Active) {
-                    Service.ChatGui.PrintError(L.Text("No alternative movement path is available. Gathering has stopped at the current waypoint."));
+                    Service.ChatGui.PrintError(Localization.GetText(LocalizationKeys.Gathering.NoDetourAvailable));
                     Finish();
                 }
                 return;
@@ -256,7 +254,7 @@ public class GatherRouteExec : IDisposable {
                 Player.Sprint();
 
             if (!Service.Navmesh.IsEnabled) {
-                Service.ChatGui.PrintError(L.Text("Automatic navigation requires vnavmesh. Please install and enable it."));
+                Service.ChatGui.PrintError(Localization.GetText(LocalizationKeys.Gathering.NavmeshRequired));
                 Finish();
                 return;
             }
@@ -275,6 +273,7 @@ public class GatherRouteExec : IDisposable {
             return;
         }
 
+        _groundShortcut.Cancel();
         _jumpRecovery.Reset();
         if (Player.ExclusiveFlying && wp.InteractWithOID != 0 && !EnsureGrounded()) return;
         _stuck.Reset();
@@ -372,6 +371,47 @@ public class GatherRouteExec : IDisposable {
             if (Service.ObjectTable.FirstOrDefault(x => x?.Position == nodePos, null) != null)
                 return true;
         return false;
+    }
+
+    private bool TryGroundShortcut(GatherRouteDB.Waypoint waypoint) {
+        if (!RouteDB.GroundShortcuts || _movementMode == AutomaticMovementMode.Fly || Player.InclusiveFlying
+            || _landing.Active || _detour.Active || _recovery.Retries > 0) {
+            if (_groundShortcut.Active) {
+                _groundShortcut.Cancel();
+                Service.Navmesh.Stop();
+                _navigationRequested = false;
+            }
+            return false;
+        }
+        var now = Environment.TickCount64;
+        var distance = Player.DistanceTo(waypoint.Position);
+        if (!_groundShortcut.Active) {
+            if (_groundShortcut.Attempted || Service.Navmesh.PathfindInProgress() || now < _nextShortcutCheckAt) return false;
+            _nextShortcutCheckAt = now + 500;
+            if (!GroundShortcut.CanTraverse(Player.Position, waypoint.Position, GroundCollision.ClearBody, GroundCollision.FloorBelow)) return false;
+            _groundShortcut.Begin(now, distance);
+            Service.Navmesh.Stop();
+            _navigationRequested = false;
+            _nextShortcutMoveAt = now;
+            Service.Log.Debug($"[GroundShortcut] trying direct movement to waypoint {CurrentWaypoint + 1}, distance={distance:F2}");
+        }
+        var action = _groundShortcut.Update(now, distance, !Player.Mounted && !Player.IsJumping);
+        if (action == GroundShortcutAction.Fallback) {
+            Service.Navmesh.Stop();
+            _navigationRequested = false;
+            Service.Log.Information($"[GroundShortcut] no progress or time limit; using vnavmesh for waypoint {CurrentWaypoint + 1}");
+            return false;
+        }
+        if (action == GroundShortcutAction.Jump) {
+            Player.Jump();
+            Service.Log.Debug("[GroundShortcut] trying a jump while moving");
+        }
+        if (!Service.Navmesh.IsRunning() && now >= _nextShortcutMoveAt) {
+            Service.Navmesh.MoveTo([waypoint.Position], false);
+            _nextShortcutMoveAt = now + 1000;
+        }
+        SetState(State.Moving);
+        return true;
     }
 
     private bool PrepareMovement() {
@@ -493,7 +533,7 @@ public class GatherRouteExec : IDisposable {
         }
         if (result == LandingResult.Failed) {
             LogLandingDiagnostic($"failed-{_landing.Failure}", true, true);
-            Service.ChatGui.PrintError(L.Text("Landing attempts exhausted or timed out. Gathering has stopped."));
+            Service.ChatGui.PrintError(Localization.GetText(LocalizationKeys.Gathering.LandingFailed));
             Finish();
             return false;
         }
@@ -567,7 +607,7 @@ public class GatherRouteExec : IDisposable {
             _detour.Begin(Player.Position, waypoint.Position, fly);
         else
             _detour.Resume(Player.Position);
-        Service.ChatGui.Print(L.Text("Navigation retries exhausted. Trying an alternative movement path to the same waypoint."));
+        Service.ChatGui.Print(Localization.GetText(LocalizationKeys.Gathering.TryingDetour));
         SetState(State.Pathfinding);
     }
 
@@ -610,7 +650,7 @@ public class GatherRouteExec : IDisposable {
     private void StopForFullNode() {
         Service.Log.Information("All currently unlocked materials at the current gathering node are at capacity; stopping.");
         Finish();
-        Service.ChatGui.Print(L.Text("Gathering stopped: all unlocked materials at the current node are at capacity."));
+        Service.ChatGui.Print(Localization.GetText(LocalizationKeys.Gathering.NodeMaterialsFull));
     }
 
     private bool IsInventoryFullError(string message) {

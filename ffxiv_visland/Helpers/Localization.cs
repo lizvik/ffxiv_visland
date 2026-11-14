@@ -1,4 +1,6 @@
 using Dalamud.Bindings.ImGui;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -8,46 +10,69 @@ using System.Text.Json;
 
 namespace visland.Helpers;
 
+// Keep this type name stable: Configuration stores its fully qualified name.
 public class LanguageConfig : Configuration.Node {
-    public string Language = "auto";
+    public string LanguageCode = Localization.SystemLanguageCode;
+
+    public override void Deserialize(JObject configurationJson, Newtonsoft.Json.JsonSerializer serializer) {
+        LanguageCode = configurationJson.Value<string>(nameof(LanguageCode))
+            ?? configurationJson.Value<string>("Language")
+            ?? Localization.SystemLanguageCode;
+    }
 }
 
-// English source text doubles as a stable resource key. Unknown keys fall back to English.
-public static class L {
-    private static readonly Dictionary<string, string> Chinese = Load("zh-CN");
-    private static Dictionary<string, string> Load(string language) {
-        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream($"visland.Localization.{language}.json");
-        if (stream == null)
-            throw new InvalidDataException($"Missing localization resource: {language}");
-        return JsonSerializer.Deserialize<Dictionary<string, string>>(stream) ?? new();
+// Semantic resource keys are independent of display text. Missing translations fall back to English.
+public static class Localization {
+    public const string SystemLanguageCode = "auto";
+    public const string EnglishLanguageCode = "en";
+    public const string SimplifiedChineseLanguageCode = "zh-CN";
+
+    private static readonly IReadOnlyDictionary<string, string> _englishTranslations = LoadTranslations(EnglishLanguageCode);
+    private static readonly IReadOnlyDictionary<string, string> _simplifiedChineseTranslations = LoadTranslations(SimplifiedChineseLanguageCode);
+
+    private static Dictionary<string, string> LoadTranslations(string languageCode) {
+        var resourceName = $"visland.Localization.{languageCode}.json";
+        using var resourceStream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resourceName)
+            ?? throw new InvalidDataException($"Missing localization resource: {languageCode}");
+        return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(resourceStream) ?? new();
     }
 
-    public static string Text(string source) {
-        var language = Service.Config.Get<LanguageConfig>().Language;
-        var chinese = language == "zh-CN" || (language == "auto" && CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "zh");
-        return chinese && Chinese.TryGetValue(source, out var translated) && translated.Length > 0 ? translated : source;
+    public static string GetText(string resourceKey) {
+        var languageCode = Service.Config.Get<LanguageConfig>().LanguageCode;
+        var useSimplifiedChinese = languageCode == SimplifiedChineseLanguageCode
+            || (languageCode == SystemLanguageCode && CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "zh");
+        if (useSimplifiedChinese && _simplifiedChineseTranslations.TryGetValue(resourceKey, out var translatedText)
+            && translatedText.Length > 0)
+            return translatedText;
+        return _englishTranslations.TryGetValue(resourceKey, out var englishText) ? englishText : resourceKey;
     }
 
-    public static string Format(string source, params object[] args) => string.Format(CultureInfo.CurrentCulture, Text(source), args);
+    public static string FormatText(string resourceKey, params object[] arguments)
+        => string.Format(CultureInfo.CurrentCulture, GetText(resourceKey), arguments);
 
-    // Keep widget identity independent of the selected display language.
-    public static string Label(string source) {
-        var separator = source.IndexOf("##", StringComparison.Ordinal);
-        var visible = separator < 0 ? source : source[..separator];
-        return Text(visible) + "###" + (separator < 0 ? source : source[(separator + (source[separator..].StartsWith("###") ? 3 : 2))..]);
-    }
+    // Call sites explicitly retain pre-migration widget IDs; new widgets default to their stable resource key.
+    public static string GetLabel(string resourceKey, string? stableWidgetId = null)
+        => GetText(resourceKey) + "###" + (stableWidgetId ?? resourceKey);
 
-    public static void DrawSelector() {
-        var config = Service.Config.Get<LanguageConfig>();
-        var selected = config.Language switch { "en" => 1, "zh-CN" => 2, _ => 0 };
-        string[] names = [Text("Automatic (system)"), "English", "简体中文"];
+    public static void DrawLanguageSelector() {
+        var languageConfig = Service.Config.Get<LanguageConfig>();
+        var selectedLanguageIndex = languageConfig.LanguageCode switch {
+            EnglishLanguageCode => 1,
+            SimplifiedChineseLanguageCode => 2,
+            _ => 0,
+        };
+        string[] languageDisplayNames = [GetText(LocalizationKeys.Settings.SystemLanguage), "English", "简体中文"];
         ImGui.AlignTextToFramePadding();
-        ImGui.TextUnformatted(Text("Language"));
+        ImGui.TextUnformatted(GetText(LocalizationKeys.Settings.Language));
         ImGui.SameLine();
         ImGui.SetNextItemWidth(200);
-        if (ImGui.Combo("###Language", ref selected, names, names.Length)) {
-            config.Language = selected switch { 1 => "en", 2 => "zh-CN", _ => "auto" };
-            config.NotifyModified();
+        if (ImGui.Combo("###Language", ref selectedLanguageIndex, languageDisplayNames, languageDisplayNames.Length)) {
+            languageConfig.LanguageCode = selectedLanguageIndex switch {
+                1 => EnglishLanguageCode,
+                2 => SimplifiedChineseLanguageCode,
+                _ => SystemLanguageCode,
+            };
+            languageConfig.NotifyModified();
         }
     }
 }
