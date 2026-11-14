@@ -71,6 +71,10 @@ public static unsafe class WorkshopUtils {
     }
 
     public static bool ScheduleItemToWorkshop(uint objId, int startingHour, int cycle, int workshop) {
+        if (workshop < 0 || workshop >= GetMaxWorkshops() || workshop >= 4 || cycle is < 0 or > 13 || startingHour is < 0 or > 23) {
+            Service.Log.Warning($"Skipping invalid workshop schedule: workshop={workshop}, cycle={cycle}, hour={startingHour}");
+            return false;
+        }
         if (!IsRecipeUnlocked(objId)) {
             Service.Log.Warning($"Skipping unavailable workshop recipe {objId}");
             return false;

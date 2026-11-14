@@ -24,16 +24,22 @@ public class WorkshopSolver {
 
         public bool Empty => Workshops.Count == 0;
 
-        public IEnumerable<(int workshop, WorkshopRec rec)> Enumerate(int maxWorkshops) {
-            if (Workshops.Count == 0)
+        public IEnumerable<(int workshop, WorkshopRec rec)> Enumerate(int maxWorkshops, bool ignoreFourthWorkshop = false) {
+            maxWorkshops = Math.Clamp(maxWorkshops, 0, 4);
+            var count = Math.Min(Workshops.Count, maxWorkshops);
+            if (count == 0)
                 yield break;
             // first schedule is duplicated if we have less schedules than workshops to fill: numDuplicates + (Count-1) == maxWorkshops
-            var numDuplicates = 1 + Math.Max(0, maxWorkshops - Workshops.Count);
+            var numDuplicates = 1 + Math.Max(0, maxWorkshops - count);
             for (var i = 0; i < numDuplicates; ++i)
-                yield return (i, Workshops[0]);
+                if (!ignoreFourthWorkshop || i != 3)
+                    yield return (i, Workshops[0]);
             // remaining: schedule #1 maps to workshop #numDuplicates etc
-            for (var i = 1; i < Workshops.Count; ++i)
-                yield return (numDuplicates + i - 1, Workshops[i]);
+            for (var i = 1; i < count; ++i) {
+                var index = numDuplicates + i - 1;
+                if (!ignoreFourthWorkshop || index != 3)
+                    yield return (index, Workshops[i]);
+            }
         }
     }
 

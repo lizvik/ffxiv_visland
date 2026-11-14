@@ -59,7 +59,7 @@ public class WorkshopManual {
     private void AddToSchedule(MJICraftworksObject row, int workshopIndices) {
         if (!WorkshopUtils.IsRecipeUnlocked(row))
             return;
-        for (var i = 0; i < 4; ++i)
+        for (var i = 0; i < WorkshopUtils.GetMaxWorkshops(); ++i)
             if ((workshopIndices & 1 << i) != 0)
                 AddToScheduleSingle(row, i);
         WorkshopUtils.ResetCurrentCycleToRefreshUI();
@@ -68,7 +68,11 @@ public class WorkshopManual {
     }
 
     private unsafe void AddToScheduleSingle(MJICraftworksObject row, int workshopIndex) {
-        var agentData = AgentMJICraftSchedule.Instance()->Data;
+        if (workshopIndex < 0 || workshopIndex >= WorkshopUtils.GetMaxWorkshops() || workshopIndex >= 4)
+            return;
+        var agent = AgentMJICraftSchedule.Instance();
+        if (agent == null || agent->Data == null) return;
+        var agentData = agent->Data;
         var slotMask = (1u << row.CraftingTime) - 1;
         var startingCycle = 0;
         var maxCycle = 24 - row.CraftingTime;

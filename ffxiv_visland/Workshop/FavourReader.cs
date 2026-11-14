@@ -10,14 +10,15 @@ namespace visland.Workshop;
 
 internal unsafe class FavourReader(List<string> botNames) {
     public WorkshopSolver.FavourState ReadFavourState(bool nextWeek) {
-        var mji = MJIManager.Instance();
-        if (mji == null || !mji->IsPlayerInSanctuary)
-            throw new Exception("Favour data requires being on your island");
+        var mji = RequireManager();
+        var favour = mji->FavorState;
+        if (favour == null || favour->UpdateState != 2)
+            throw new InvalidOperationException("Favour data is not available yet");
         var state = new WorkshopSolver.FavourState();
         var offset = nextWeek ? 6 : 3;
         for (var i = 0; i < 3; ++i) {
-            state.CraftObjectIds[i] = mji->FavorState->CraftObjectIds[i + offset];
-            state.CompletedCounts[i] = mji->FavorState->NumDelivered[i + offset] + mji->FavorState->NumScheduled[i + offset];
+            state.CraftObjectIds[i] = favour->CraftObjectIds[i + offset];
+            state.CompletedCounts[i] = favour->NumDelivered[i + offset] + favour->NumScheduled[i + offset];
         }
         if (!mji->DemandDirty)
             state.Popularity.Set(nextWeek ? mji->NextPopularity : mji->CurrentPopularity);
@@ -27,26 +28,41 @@ internal unsafe class FavourReader(List<string> botNames) {
     }
 
     public string CreateFavourRequestCommand(bool nextWeek) {
-        var state = MJIManager.Instance()->FavorState;
-        if (state == null || state->UpdateState != 2) {
-            throw new Exception($"Favour data not available: {state->UpdateState}");
-        }
+        var state = RequireManager()->FavorState;
+        if (state == null)
+            throw new InvalidOperationException("Favour data is not available yet");
+        if (state->UpdateState != 2)
+            throw new InvalidOperationException($"Favour data not available: {state->UpdateState}");
 
         var res = "/favors";
         var offset = nextWeek ? 6 : 3;
         for (var i = 0; i < 3; ++i) {
             var id = state->CraftObjectIds[offset + i];
             var name = MJICraftworksObject.GetRow(id)?.WithLanguage(Language.English).Item.Value.Name ?? string.Empty;
-            if (!name.IsEmpty)
-                res += $" favor{i + 1}:{botNames[id].Replace("\'", "")}";
+            if (!name.IsEmpty && id < botNames.Count)
+                res += $" favor{i + 1}:{botNames[(int)id].Replace("\'", "")}";
         }
         return res;
     }
 
+    private static MJIManager* RequireManager() {
+        var manager = MJIManager.Instance();
+        if (manager == null || !manager->IsPlayerInSanctuary)
+            throw new InvalidOperationException("Favour data requires being on your island");
+        return manager;
+    }
+
     public void EnsureDemandFavoursAvailable(List<Func<bool>> pendingActions) {
-        if (MJIManager.Instance()->DemandDirty) {
+        var manager = RequireManager();
+        if (manager->DemandDirty || manager->FavorState == null || manager->FavorState->UpdateState != 2) {
             WorkshopUtils.RequestDemandFavours();
-            pendingActions.Add(() => !MJIManager.Instance()->DemandDirty && MJIManager.Instance()->FavorState->UpdateState == 2);
+            var started = Environment.TickCount64;
+            pendingActions.Add(() => {
+                var current = RequireManager();
+                if (Environment.TickCount64 - started >= 20000)
+                    throw new TimeoutException("Timed out waiting for workshop demand and favour data");
+                return !current->DemandDirty && current->FavorState != null && current->FavorState->UpdateState == 2;
+            });
         }
     }
 

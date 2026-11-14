@@ -48,6 +48,13 @@ public static class LocalizationKeys {
     }
 
     public static class Gathering {
+        public const string CommandFailed = "Gathering.CommandFailed";
+        public const string CommandUsage = "Gathering.CommandUsage";
+        public const string EmptyRoute = "Gathering.EmptyRoute";
+        public const string InvalidCoordinates = "Gathering.InvalidCoordinates";
+        public const string InvalidRouteData = "Gathering.InvalidRouteData";
+        public const string RouteNameRequired = "Gathering.RouteNameRequired";
+        public const string RouteNotFound = "Gathering.RouteNotFound";
         public const string AddRemoveTargetFromWaypoint = "Gathering.AddRemoveTargetFromWaypoint";
         public const string AddWaypointCurrentPosition = "Gathering.AddWaypointCurrentPosition";
         public const string AddWaypointInteractWithTarget = "Gathering.AddWaypointInteractWithTarget";

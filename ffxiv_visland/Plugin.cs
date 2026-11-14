@@ -1,7 +1,7 @@
 using Dalamud.Game.Command;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
-using System.Globalization;
+using System;
 using System.Linq;
 using System.Numerics;
 using visland.Export;
@@ -62,19 +62,17 @@ public sealed class Plugin : IDalamudPlugin {
     private void OpenMainUi() => _windowSystem.Get<GatherWindow>()!.IsOpen = true;
 
     private void OnCommand(string command, string arguments) {
-        Service.Log.Debug($"cmd: '{command}', args: '{arguments}'");
-        if (arguments.Length == 0)
-            _windowSystem.Get<GatherWindow>()!.IsOpen ^= true;
-        else {
-            var args = arguments.Split(' ');
+        try {
+            arguments = arguments.Trim();
+            var args = arguments.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            if (args.Length == 0) {
+                _windowSystem.Get<GatherWindow>()!.IsOpen ^= true;
+                return;
+            }
             switch (args[0]) {
                 case "moveto":
-                    if (args.Length > 3)
-                        MoveToCommand(args, false);
-                    break;
                 case "movedir":
-                    if (args.Length > 3)
-                        MoveToCommand(args, true);
+                    MoveToCommand(args, args[0] == "movedir");
                     break;
                 case "stop":
                     Service.RouteExec.Finish();
@@ -86,42 +84,63 @@ public sealed class Plugin : IDalamudPlugin {
                     Service.RouteExec.Paused = false;
                     break;
                 case "exec":
-                    ExecuteCommand(string.Join(" ", args.Skip(1)), false);
-                    break;
                 case "execonce":
-                    ExecuteCommand(string.Join(" ", args.Skip(1)), true);
+                    ExecuteCommand(arguments[args[0].Length..].Trim(), args[0] == "execonce");
                     break;
                 case "exectemp":
-                    ExecuteTempRoute(args[1], false);
-                    break;
                 case "exectemponce":
-                    ExecuteTempRoute(args[1], true);
+                    if (args.Length != 2)
+                        throw new ArgumentException(Localization.FormatText(LocalizationKeys.Gathering.CommandUsage, $"/visland {args[0]} <base64 route>"));
+                    ExecuteTempRoute(args[1], args[0] == "exectemponce");
                     break;
+                default:
+                    throw new ArgumentException(Localization.FormatText(LocalizationKeys.Gathering.CommandUsage, HelpMessage));
             }
+        }
+        catch (Exception ex) {
+            Service.Log.Warning(ex, "Unable to execute visland command");
+            Service.ChatGui.PrintError(Localization.FormatText(LocalizationKeys.Gathering.CommandFailed, ex.Message));
         }
     }
 
     internal void ExecuteTempRoute(string base64, bool once) {
-        (var _, var json) = Utils.FromCompressedBase64(base64);
-        var route = Newtonsoft.Json.JsonConvert.DeserializeObject<GatherRouteDB.Route>(json);
-        if (route != null)
-            Service.RouteExec.Start(route, 0, true, !once);
-        else
-            Service.Log.Warning($"Failed to deserialize route from clipboard: {base64}");
+        GatherRouteDB.Route? route;
+        try {
+            var (_, json) = Utils.FromCompressedBase64(base64);
+            route = Newtonsoft.Json.JsonConvert.DeserializeObject<GatherRouteDB.Route>(json);
+        }
+        catch (Exception ex) {
+            throw new ArgumentException(Localization.GetText(LocalizationKeys.Gathering.InvalidRouteData), ex);
+        }
+        ValidateCommandRoute(route);
+        Service.RouteExec.Start(route!, 0, true, !once);
+    }
+
+    private static void ValidateCommandRoute(GatherRouteDB.Route? route) {
+        if (route?.Waypoints is not { Count: > 0 })
+            throw new ArgumentException(Localization.GetText(LocalizationKeys.Gathering.EmptyRoute));
+        if (route.Waypoints.Any(waypoint => waypoint == null || !CommandArguments.IsFinite(waypoint.Position)
+            || !float.IsFinite(waypoint.Radius) || waypoint.Radius < 0))
+            throw new ArgumentException(Localization.GetText(LocalizationKeys.Gathering.InvalidRouteData));
     }
 
     internal void MoveToCommand(string[] args, bool relativeToPlayer) {
+        if (!CommandArguments.TryParsePosition(args, out var offset))
+            throw new ArgumentException(Localization.GetText(LocalizationKeys.Gathering.InvalidCoordinates));
         var originActor = relativeToPlayer ? Service.ObjectTable.LocalPlayer : null;
         var origin = originActor?.Position ?? new();
-        var offset = new Vector3(float.Parse(args[1], CultureInfo.InvariantCulture), float.Parse(args[2], CultureInfo.InvariantCulture), float.Parse(args[3], CultureInfo.InvariantCulture));
         var route = new GatherRouteDB.Route { Name = "Temporary", Waypoints = [] };
         route.Waypoints.Add(new() { Position = origin + offset, Radius = 0.5f, InteractWithName = "", InteractWithOID = 0 });
         Service.RouteExec.Start(route, 0, false, false);
     }
 
     internal void ExecuteCommand(string name, bool once) {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException(Localization.GetText(LocalizationKeys.Gathering.RouteNameRequired));
         var route = Service.RouteExec.RouteDB.Routes.Find(r => r.Name == name);
-        if (route != null)
-            Service.RouteExec.Start(route, 0, true, !once, route.Waypoints.ElementAt(0).Pathfind);
+        if (route == null)
+            throw new ArgumentException(Localization.FormatText(LocalizationKeys.Gathering.RouteNotFound, name));
+        ValidateCommandRoute(route);
+        Service.RouteExec.Start(route, 0, true, !once);
     }
 }

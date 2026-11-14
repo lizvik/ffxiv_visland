@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 namespace visland.Gathering;
 
 // Nav.Pathfind only calculates. Only this owner may apply a still-current result to movement.
-internal sealed class LandingPathRequest {
+internal sealed class PathfindRequest {
     private Task<List<Vector3>>? _task;
     private CancellationTokenSource? _cancel;
     private Vector3 _destination;

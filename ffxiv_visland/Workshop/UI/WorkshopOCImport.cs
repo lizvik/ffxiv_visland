@@ -37,8 +37,14 @@ public unsafe class WorkshopOCImport {
     }
 
     public void Update() {
-        var numDone = _pendingActions.TakeWhile(f => f()).Count();
-        _pendingActions.RemoveRange(0, numDone);
+        try {
+            while (_pendingActions.Count > 0 && _pendingActions[0]())
+                _pendingActions.RemoveAt(0);
+        }
+        catch (Exception ex) {
+            _pendingActions.Clear();
+            ReportError(ex.Message);
+        }
     }
 
     public void Draw() {
@@ -186,31 +192,21 @@ public unsafe class WorkshopOCImport {
             if (ImGui.Button($"Set on Active Cycle##{c}"))
                 _applier.ApplyRecommendationToCurrentCycle(r);
 
-            using var outerTable = ImRaii.Table($"table_{c}", r.Workshops.Count, tableFlags);
+            var workshops = r.Enumerate(maxWorkshops, _applier.IgnoreFourthWorkshop).ToArray();
+            if (workshops.Length == 0) continue;
+            using var outerTable = ImRaii.Table($"table_{c}", workshops.Length, tableFlags);
             if (outerTable) {
-                var workshopLimit = r.Workshops.Count - (_applier.IgnoreFourthWorkshop && r.Workshops.Count > 1 ? 1 : 0);
-                if (r.Workshops.Count <= 1) {
-                    ImGui.TableSetupColumn(_applier.IgnoreFourthWorkshop ? $"Workshops 1-{maxWorkshops - 1}" : "All Workshops");
-                }
-                else if (r.Workshops.Count < maxWorkshops) {
-                    var numDuplicates = 1 + maxWorkshops - r.Workshops.Count;
-                    ImGui.TableSetupColumn($"Workshops 1-{numDuplicates}");
-                    for (var i = 1; i < workshopLimit; ++i)
-                        ImGui.TableSetupColumn($"Workshop {i + numDuplicates}");
-                }
-                else {
-                    for (var i = 0; i < workshopLimit; ++i)
-                        ImGui.TableSetupColumn($"Workshop {i + 1}");
-                }
+                for (var i = 0; i < workshops.Length; ++i)
+                    ImGui.TableSetupColumn($"Workshop {workshops[i].workshop + 1}");
                 ImGui.TableHeadersRow();
 
                 ImGui.TableNextRow();
-                for (var i = 0; i < workshopLimit; ++i) {
+                for (var i = 0; i < workshops.Length; ++i) {
                     ImGui.TableNextColumn();
                     using var innerTable = ImRaii.Table($"table_{c}_{i}", 2, tableFlags);
                     if (innerTable) {
                         ImGui.TableSetupColumn("", ImGuiTableColumnFlags.WidthFixed);
-                        foreach (var rec in r.Workshops[i].Slots) {
+                        foreach (var rec in workshops[i].rec.Slots) {
                             ImGui.TableNextRow();
 
                             ImGui.TableNextColumn();

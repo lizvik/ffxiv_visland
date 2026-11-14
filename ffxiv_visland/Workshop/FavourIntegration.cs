@@ -34,26 +34,23 @@ public static class FavourIntegration {
                 days[freeRestCycle] = new WorkshopSolver.DayRec();
         }
 
+        var maxWorkshops = WorkshopUtils.GetMaxWorkshops();
         var credited = (int[])favours.CompletedCounts.Clone();
         if (mode == FavourMode.ReplaceWorkshop4) {
-            // Only credit the kept main pattern (WS1-3). A single workshop entry is duplicated across them.
-            foreach (var day in days.Values) {
-                if (day.Workshops.Count == 0)
-                    continue;
-                var mainCopies = Math.Min(3, 1 + Math.Max(0, 4 - Math.Max(day.Workshops.Count, 1)));
-                for (var i = 0; i < mainCopies; ++i)
-                    CreditWorkshop(day.Workshops[0], favours.CraftObjectIds, credited, sheet);
-            }
+            // Credit exactly the physical workshops that will keep their schedules.
+            foreach (var day in days.Values)
+                foreach (var workshop in day.Enumerate(maxWorkshops, ignoreFourthWorkshop: true))
+                    CreditWorkshop(workshop.rec, favours.CraftObjectIds, credited, sheet);
         }
         else {
-            CreditSchedule(days.Values, favours.CraftObjectIds, credited, sheet);
+            CreditSchedule(days.Values, favours.CraftObjectIds, credited, sheet, maxWorkshops);
         }
 
         if (mode is FavourMode.MinMax or FavourMode.MinMaxFreeRestDay) {
             foreach (var day in days.Values)
-                TrySubstitutions(day, favours.CraftObjectIds, credited, sheet);
+                TrySubstitutions(day, favours.CraftObjectIds, credited, sheet, maxWorkshops);
             credited = (int[])favours.CompletedCounts.Clone();
-            CreditSchedule(days.Values, favours.CraftObjectIds, credited, sheet);
+            CreditSchedule(days.Values, favours.CraftObjectIds, credited, sheet, maxWorkshops);
         }
 
         if (NeedsMet(credited))
@@ -144,8 +141,10 @@ public static class FavourIntegration {
         return ToRecs(days);
     }
 
-    private static void TrySubstitutions(WorkshopSolver.DayRec day, uint[] favourIds, int[] complete, ExcelSheet<MJICraftworksObject> sheet) {
-        foreach (var workshop in day.Workshops) {
+    private static void TrySubstitutions(WorkshopSolver.DayRec day, uint[] favourIds, int[] complete, ExcelSheet<MJICraftworksObject> sheet, int maxWorkshops) {
+        foreach (var copies in day.Enumerate(maxWorkshops).GroupBy(w => w.rec)) {
+            var workshop = copies.Key;
+            var copyCount = copies.Count();
             for (var i = 0; i < workshop.Slots.Count; ++i) {
                 if (!TryRow(sheet, workshop.Slots[i].CraftObjectId, out var current))
                     continue;
@@ -179,7 +178,7 @@ public static class FavourIntegration {
                         continue;
 
                     workshop.Slots[i] = new WorkshopSolver.SlotRec(workshop.Slots[i].Slot, favour.RowId);
-                    complete[f] += newPrevLink ? 2 : 1;
+                    complete[f] += (newPrevLink ? 2 : 1) * copyCount;
                     break;
                 }
             }
@@ -194,10 +193,10 @@ public static class FavourIntegration {
         return a1 != 0 && (a1 == b1 || a1 == b2) || a2 != 0 && (a2 == b1 || a2 == b2);
     }
 
-    public static void CreditSchedule(IEnumerable<WorkshopSolver.DayRec> days, uint[] favourIds, int[] complete, ExcelSheet<MJICraftworksObject> sheet) {
+    public static void CreditSchedule(IEnumerable<WorkshopSolver.DayRec> days, uint[] favourIds, int[] complete, ExcelSheet<MJICraftworksObject> sheet, int maxWorkshops = 4) {
         foreach (var day in days)
-            foreach (var workshop in day.Workshops)
-                CreditWorkshop(workshop, favourIds, complete, sheet);
+            foreach (var workshop in day.Enumerate(maxWorkshops))
+                CreditWorkshop(workshop.rec, favourIds, complete, sheet);
     }
 
     public static void CreditWorkshop(WorkshopSolver.WorkshopRec workshop, uint[] favourIds, int[] complete, ExcelSheet<MJICraftworksObject> sheet) {

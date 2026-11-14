@@ -2,6 +2,7 @@
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
 using System.Runtime.CompilerServices;
+using System.Collections.Generic;
 using visland.Helpers;
 
 namespace visland.Granary;
@@ -57,18 +58,13 @@ public static unsafe class GranaryUtils {
         if (gstate == null)
             return CollectResult.NothingToCollect;
 
-        var haveAnything = gstate->RareResourceCount > 0;
-        var overcapSome = haveAnything && WillOvercap(gstate->RareResourcePouchId, gstate->RareResourceCount);
-        var overcapAll = !haveAnything || overcapSome;
-        for (var i = 0; i < gstate->NormalResourceCounts.Length; ++i) {
-            if (gstate->NormalResourceCounts[i] > 0) {
-                haveAnything = true;
-                var overcap = WillOvercap(gstate->NormalResourcePouchIds[i], gstate->NormalResourceCounts[i]);
-                overcapSome |= overcap;
-                overcapAll &= overcap;
-            }
-        }
-        return !haveAnything ? CollectResult.NothingToCollect : overcapAll ? CollectResult.EverythingCapped : overcapSome ? CollectResult.CanCollectWithOvercap : CollectResult.CanCollectSafely;
+        var resources = new List<(int inventory, int amount)>();
+        if (gstate->RareResourceCount > 0)
+            resources.Add((ResourceInventory(gstate->RareResourcePouchId), gstate->RareResourceCount));
+        for (var i = 0; i < gstate->NormalResourceCounts.Length; ++i)
+            if (gstate->NormalResourceCounts[i] > 0)
+                resources.Add((ResourceInventory(gstate->NormalResourcePouchIds[i]), gstate->NormalResourceCounts[i]));
+        return CollectionCapacity.Classify(resources);
     }
 
     public static AgentMJIGatheringHouse.Confirmation CalculateConfirmation(byte curExpedition, byte curDays, byte newExpedition, byte newDays)
@@ -79,5 +75,5 @@ public static unsafe class GranaryUtils {
 
     public static int MaxDays() => Utils.NumCowries() / 50;
 
-    private static bool WillOvercap(uint pouchId, int count) => Utils.NumItems(MJIItemPouch.GetRow(pouchId)!.Value.Item.RowId) + count > 999;
+    private static int ResourceInventory(uint pouchId) => Utils.NumItems(MJIItemPouch.GetRow(pouchId)!.Value.Item.RowId);
 }

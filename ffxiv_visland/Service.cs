@@ -52,6 +52,7 @@ public class Service {
 
     public static void Dispose() {
         RouteExec.Dispose();
+        Navmesh.Dispose();
         TaskManager.Dispose();
         Config.Dispose();
     }

@@ -4,10 +4,13 @@ using System.Collections.Generic;
 using System.Numerics;
 using System.Threading.Tasks;
 using System.Threading;
+using Dalamud.Plugin.Services;
+using visland.Gathering;
+using visland.Helpers;
 
 namespace visland.IPC;
 
-public class NavmeshIPC {
+public class NavmeshIPC : IDisposable {
     public const string Name = "vnavmesh";
 
     private readonly ICallGateSubscriber<bool> _navIsReady;
@@ -32,8 +35,8 @@ public class NavmeshIPC {
     private readonly ICallGateSubscriber<bool, object> _pathSetAlignCamera;
     private readonly ICallGateSubscriber<float> _pathGetTolerance;
     private readonly ICallGateSubscriber<float, object> _pathSetTolerance;
-    private readonly ICallGateSubscriber<Vector3, bool, bool> _pathfindAndMoveTo;
-    private readonly ICallGateSubscriber<bool> _pathfindInProgress;
+    private readonly PathfindRequest _movementRequest = new();
+    private bool _movementUsesVolume;
 
     public NavmeshIPC() {
         _navIsReady = Service.Interface.GetIpcSubscriber<bool>($"{Name}.Nav.IsReady");
@@ -58,8 +61,7 @@ public class NavmeshIPC {
         _pathSetAlignCamera = Service.Interface.GetIpcSubscriber<bool, object>($"{Name}.Path.SetAlignCamera");
         _pathGetTolerance = Service.Interface.GetIpcSubscriber<float>($"{Name}.Path.GetTolerance");
         _pathSetTolerance = Service.Interface.GetIpcSubscriber<float, object>($"{Name}.Path.SetTolerance");
-        _pathfindAndMoveTo = Service.Interface.GetIpcSubscriber<Vector3, bool, bool>($"{Name}.SimpleMove.PathfindAndMoveTo");
-        _pathfindInProgress = Service.Interface.GetIpcSubscriber<bool>($"{Name}.SimpleMove.PathfindInProgress");
+        Service.Framework.Update += Update;
     }
 
     public bool IsEnabled => _navIsReady.HasFunction;
@@ -71,7 +73,9 @@ public class NavmeshIPC {
     public Task<List<Vector3>>? Pathfind(Vector3 from, Vector3 to, bool fly = false)
         => _navPathfind.HasFunction ? _navPathfind.InvokeFunc(from, to, fly) : null;
     public Task<List<Vector3>>? PathfindForLanding(Vector3 from, Vector3 to, CancellationToken cancellation)
-        => _navPathfindCancelable.HasFunction ? _navPathfindCancelable.InvokeFunc(from, to, true, cancellation) : Pathfind(from, to, true);
+        => PathfindCancelable(from, to, true, cancellation);
+    public Task<List<Vector3>>? PathfindCancelable(Vector3 from, Vector3 to, bool fly, CancellationToken cancellation)
+        => _navPathfindCancelable.HasFunction ? _navPathfindCancelable.InvokeFunc(from, to, fly, cancellation) : Pathfind(from, to, fly);
     public bool IsAutoLoad() => _navIsAutoLoad.HasFunction && _navIsAutoLoad.InvokeFunc();
     public void SetAutoLoad(bool value) { if (_navSetAutoLoad.HasAction) _navSetAutoLoad.InvokeAction(value); }
 
@@ -92,8 +96,14 @@ public class NavmeshIPC {
     public Vector3? QueryMeshPointOnFloor(Vector3 pos, bool allowUnlandable, float halfExtentXZ)
         => _queryMeshPointOnFloor.HasFunction ? _queryMeshPointOnFloor.InvokeFunc(pos, allowUnlandable, halfExtentXZ) : null;
 
-    public void MoveTo(List<Vector3> waypoints, bool fly) { if (_pathMoveTo.HasAction) _pathMoveTo.InvokeAction(waypoints, fly); }
-    public void Stop() { if (_pathStop.HasAction) _pathStop.InvokeAction(); }
+    public void MoveTo(List<Vector3> waypoints, bool fly) {
+        _movementRequest.Reset();
+        if (_pathMoveTo.HasAction) _pathMoveTo.InvokeAction(waypoints, fly);
+    }
+    public void Stop() {
+        _movementRequest.Reset();
+        if (_pathStop.HasAction) _pathStop.InvokeAction();
+    }
     public bool IsRunning() => _pathIsRunning.HasFunction && _pathIsRunning.InvokeFunc();
     public List<Vector3>? ListWaypoints() => _pathListWaypoints.HasFunction ? _pathListWaypoints.InvokeFunc() : null;
     public int NumWaypoints() => _pathNumWaypoints.HasFunction ? _pathNumWaypoints.InvokeFunc() : 0;
@@ -104,6 +114,22 @@ public class NavmeshIPC {
     public float GetTolerance() => _pathGetTolerance.HasFunction ? _pathGetTolerance.InvokeFunc() : 0;
     public void SetTolerance(float tolerance) { if (_pathSetTolerance.HasAction) _pathSetTolerance.InvokeAction(tolerance); }
 
-    public bool PathfindAndMoveTo(Vector3 pos, bool fly) => _pathfindAndMoveTo.HasFunction && _pathfindAndMoveTo.InvokeFunc(pos, fly);
-    public bool PathfindInProgress() => _pathfindInProgress.HasFunction && _pathfindInProgress.InvokeFunc();
+    public bool PathfindAndMoveTo(Vector3 pos, bool fly) {
+        if (_movementRequest.Pending) return false;
+        _movementUsesVolume = fly;
+        return _movementRequest.Begin(Player.Position, pos, Environment.TickCount64,
+            (from, to, cancellation) => PathfindCancelable(from, to, fly, cancellation));
+    }
+    public bool PathfindInProgress() => _movementRequest.Pending;
+
+    private void Update(IFramework framework) {
+        var result = _movementRequest.Poll(Environment.TickCount64, path => MoveTo(path, _movementUsesVolume));
+        if (result != null && result != "query-applied")
+            Service.Log.Warning($"Navigation request failed: {result}");
+    }
+
+    public void Dispose() {
+        Service.Framework.Update -= Update;
+        Stop();
+    }
 }

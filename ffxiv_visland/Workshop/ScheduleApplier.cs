@@ -15,14 +15,13 @@ internal class ScheduleApplier {
         rec = WorkshopUtils.RecalculateRecipes(recommendations, cycle >= 7).Schedules[0];
         var maxWorkshops = WorkshopUtils.GetMaxWorkshops();
         var scheduled = 0;
-        foreach (var w in rec.Enumerate(maxWorkshops))
-            if (!IgnoreFourthWorkshop || w.workshop < maxWorkshops - 1)
-                foreach (var r in w.rec.Slots) {
-                    if (r.Slot < minStartingHour)
-                        continue;
-                    if (WorkshopUtils.ScheduleItemToWorkshop(r.CraftObjectId, r.Slot, cycle, w.workshop))
-                        scheduled++;
-                }
+        foreach (var w in rec.Enumerate(maxWorkshops, IgnoreFourthWorkshop))
+            foreach (var r in w.rec.Slots) {
+                if (r.Slot < minStartingHour)
+                    continue;
+                if (WorkshopUtils.ScheduleItemToWorkshop(r.CraftObjectId, r.Slot, cycle, w.workshop))
+                    scheduled++;
+            }
         return scheduled;
     }
 
@@ -56,8 +55,8 @@ internal class ScheduleApplier {
             if ((completedCycles & (1u << (c - 1))) != 0)
                 continue;
             var minHour = c - 1 == cycleInProgress ? hourSinceStart : 0;
-            hasApplicable |= r.Workshops.Any(w => w.Slots.Any(s => s.Slot >= minHour
-                && WorkshopUtils.IsRecipeUnlocked(s.CraftObjectId)));
+            hasApplicable |= r.Enumerate(WorkshopUtils.GetMaxWorkshops(), IgnoreFourthWorkshop)
+                .Any(w => w.rec.Slots.Any(s => s.Slot >= minHour && WorkshopUtils.IsRecipeUnlocked(s.CraftObjectId)));
         }
         if (!hasApplicable)
             throw new Exception("No remaining cycles to apply — the whole schedule is already done or in progress");
