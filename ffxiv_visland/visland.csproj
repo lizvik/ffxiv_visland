@@ -1,16 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
 	<PropertyGroup>
-		<Version>0.0.0.0</Version>
+		<Version>1.0.0.0</Version>
 		<LangVersion>preview</LangVersion>
 
-		<Author>veyn, croizat</Author>
+		<Author>Lizvik</Author>
 		<Name>Visland</Name>
 		<InternalName>visland</InternalName>
+		<Tags>island-sanctuary;gathering;workshop</Tags>
+		<CategoryTags>utility</CategoryTags>
 		<Punchline>Automate island sanctuary activities</Punchline>
 		<Description>Automate gathering, workshop assignments, etc.</Description>
-		<RepoUrl>https://github.com/awgil/ffxiv_visland</RepoUrl>
-		<IconUrl>https://raw.githubusercontent.com/awgil/ffxiv_visland/d3338f6ddbf54365e60fbdf8e85ea8f5abdb745f/icon.png</IconUrl>
+		<RepoUrl>https://github.com/lizvik/ffxiv_visland</RepoUrl>
+		<IconUrl>https://raw.githubusercontent.com/lizvik/ffxiv_visland/master/icon.png</IconUrl>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Linux)))'">

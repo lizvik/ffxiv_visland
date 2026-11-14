@@ -1,0 +1,27 @@
+[
+  {
+    "Author": "Lizvik",
+    "Name": "Visland",
+    "InternalName": "visland",
+    "AssemblyVersion": "1.0.0.0",
+    "TestingAssemblyVersion": "1.0.0.0",
+    "Description": "Automate gathering, workshop assignments, etc.",
+    "Punchline": "Automate island sanctuary activities",
+    "RepoUrl": "https://github.com/lizvik/ffxiv_visland",
+    "ApplicableVersion": "any",
+    "Tags": [
+      "island-sanctuary",
+      "gathering",
+      "workshop"
+    ],
+    "CategoryTags": [
+      "utility"
+    ],
+    "DalamudApiLevel": 15,
+    "IconUrl": "https://raw.githubusercontent.com/lizvik/ffxiv_visland/master/icon.png",
+    "DownloadLinkInstall": "https://github.com/lizvik/ffxiv_visland/releases/latest/download/latest.zip",
+    "DownloadLinkUpdate": "https://github.com/lizvik/ffxiv_visland/releases/latest/download/latest.zip",
+    "DownloadLinkTesting": "https://github.com/lizvik/ffxiv_visland/releases/latest/download/latest.zip",
+    "IsTestingExclusive": false
+  }
+]

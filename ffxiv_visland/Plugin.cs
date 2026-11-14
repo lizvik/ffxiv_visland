@@ -44,17 +44,22 @@ public sealed class Plugin : IDalamudPlugin {
 
         Service.Interface.UiBuilder.Draw += OnDraw;
         Service.CommandManager.AddHandler("/visland", new CommandInfo(OnCommand) { HelpMessage = HelpMessage });
-        Service.Interface.UiBuilder.OpenConfigUi += () => _windowSystem.Get<GatherWindow>()!.IsOpen = true;
+        Service.Interface.UiBuilder.OpenMainUi += OpenMainUi;
+        Service.Interface.UiBuilder.OpenConfigUi += OpenMainUi;
     }
 
     public void Dispose() {
         Service.CommandManager.RemoveHandler("/visland");
+        Service.Interface.UiBuilder.OpenMainUi -= OpenMainUi;
+        Service.Interface.UiBuilder.OpenConfigUi -= OpenMainUi;
         Service.Interface.UiBuilder.Draw -= OnDraw;
         _windowSystem.Dispose();
         Service.Dispose();
     }
 
     private void OnDraw() => _windowSystem.Draw();
+
+    private void OpenMainUi() => _windowSystem.Get<GatherWindow>()!.IsOpen = true;
 
     private void OnCommand(string command, string arguments) {
         Service.Log.Debug($"cmd: '{command}', args: '{arguments}'");
