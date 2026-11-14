@@ -20,7 +20,6 @@ unsafe class WorkshopWindow : UIAttachedWindow {
         var agent = AgentMJICraftSchedule.Instance();
         IsOpen &= agent != null && agent->Data != null;
 
-        _oc.Update();
     }
 
     public override void Draw() {

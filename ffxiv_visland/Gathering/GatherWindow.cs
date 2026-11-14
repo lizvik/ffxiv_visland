@@ -1,8 +1,8 @@
+using ECommons.ImGuiMethods;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Interface;
 using Dalamud.Interface.Colors;
-using Dalamud.Interface.Components;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using Lumina.Excel.Sheets;
@@ -106,7 +106,7 @@ public class GatherWindow : Window {
 
     private unsafe void DrawSidebar(Vector2 size) {
         using (ImRaii.Child("Sidebar", size, false)) {
-            if (ImGuiComponents.IconButton(FontAwesomeIcon.Plus)) {
+            if (ImGuiEx.IconButton(FontAwesomeIcon.Plus)) {
                 RouteDB.Routes.Add(new() { Name = "Unnamed Route" });
                 RouteDB.NotifyModified();
             }
@@ -114,7 +114,7 @@ public class GatherWindow : Window {
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(Localization.GetText(LocalizationKeys.Gathering.CreateANewRoute));
             ImGui.SameLine();
 
-            if (ImGuiComponents.IconButton(FontAwesomeIcon.FileImport))
+            if (ImGuiEx.IconButton(FontAwesomeIcon.FileImport))
                 TryImport(RouteDB);
             if (ImGui.IsItemHovered())
                 ImGui.SetTooltip(Localization.GetText(LocalizationKeys.Gathering.ImportRouteFromClipboard));
@@ -122,7 +122,7 @@ public class GatherWindow : Window {
             ImGui.SameLine();
             RapidImport();
 
-            ImGui.TextV(Localization.GetText(LocalizationKeys.Gathering.Search));
+            ImGuiEx.TextV(Localization.GetText(LocalizationKeys.Gathering.Search));
             ImGui.SameLine();
             ImGui.SetNextItemWidth(-1);
             var wasSearching = searchString.Length > 0;
@@ -217,7 +217,7 @@ public class GatherWindow : Window {
         if (ImGui.Checkbox(Localization.GetLabel(LocalizationKeys.Gathering.EnableRapidImport, "Enable Rapid Import"), ref RapidImportEnabled))
             ImGui.SetClipboardText("");
 
-        ImGuiComponents.HelpMarker(Localization.GetText(LocalizationKeys.Gathering.RapidImportHelp));
+        ImGuiEx.HelpMarker(Localization.GetText(LocalizationKeys.Gathering.RapidImportHelp));
         if (RapidImportEnabled) {
             try {
                 var text = ImGui.GetClipboardText();
@@ -278,31 +278,31 @@ public class GatherWindow : Window {
                 RouteDB.NotifyModified();
             }
         }
-        ImGuiComponents.HelpMarker(Localization.GetText(LocalizationKeys.Gathering.AutomaticMovementHelp));
+        ImGuiEx.HelpMarker(Localization.GetText(LocalizationKeys.Gathering.AutomaticMovementHelp));
 
         if (ImGui.Checkbox(Localization.GetLabel(LocalizationKeys.Gathering.GroundShortcuts, "Try short ground shortcuts"), ref RouteDB.GroundShortcuts))
             RouteDB.NotifyModified();
-        ImGuiComponents.HelpMarker(Localization.GetText(LocalizationKeys.Gathering.GroundShortcutsHelp));
+        ImGuiEx.HelpMarker(Localization.GetText(LocalizationKeys.Gathering.GroundShortcutsHelp));
 
         if (ImGui.SliderInt(Localization.GetLabel(LocalizationKeys.Gathering.StuckTimeoutSeconds, "Stuck timeout (seconds)"), ref RouteDB.StuckTimeoutSeconds, 0, 300)) {
             RouteDB.StuckTimeoutSeconds = Math.Clamp(RouteDB.StuckTimeoutSeconds, 0, 300);
             RouteDB.NotifyModified();
         }
-        ImGuiComponents.HelpMarker(Localization.GetText(LocalizationKeys.Gathering.StuckDetectionHelp));
+        ImGuiEx.HelpMarker(Localization.GetText(LocalizationKeys.Gathering.StuckDetectionHelp));
 
         if (ImGui.SliderInt(Localization.GetLabel(LocalizationKeys.Gathering.NavigationRetryLimit, "Navigation retry limit"), ref RouteDB.StuckMaxRetries, 0, 20)) {
             RouteDB.StuckMaxRetries = Math.Clamp(RouteDB.StuckMaxRetries, 0, 20);
             RouteDB.NotifyModified();
         }
-        ImGuiComponents.HelpMarker(Localization.GetText(LocalizationKeys.Gathering.NavigationRetryHelp));
+        ImGuiEx.HelpMarker(Localization.GetText(LocalizationKeys.Gathering.NavigationRetryHelp));
 
         if (ImGui.Checkbox(Localization.GetLabel(LocalizationKeys.Gathering.AutoEnableIslandSanctuaryGatherMode, "Auto Enable Island Sanctuary Gather Mode"), ref RouteDB.GatherModeOnStart))
             RouteDB.NotifyModified();
-        ImGuiComponents.HelpMarker(Localization.GetText(LocalizationKeys.Gathering.GatherModeHelp));
+        ImGuiEx.HelpMarker(Localization.GetText(LocalizationKeys.Gathering.GatherModeHelp));
 
         if (ImGui.Checkbox(Localization.GetLabel(LocalizationKeys.Gathering.StopOnInventoryFull, "Stop when inventory is full"), ref RouteDB.StopOnInventoryFull))
             RouteDB.NotifyModified();
-        ImGuiComponents.HelpMarker(Localization.GetText(LocalizationKeys.Gathering.StopOnInventoryFullHelp));
+        ImGuiEx.HelpMarker(Localization.GetText(LocalizationKeys.Gathering.StopOnInventoryFullHelp));
 
     }
 
@@ -314,7 +314,7 @@ public class GatherWindow : Window {
         var route = selectedRouteIndex >= routeSource.Count ? routeSource.Last() : routeSource[selectedRouteIndex];
 
         using (ImRaii.Child("Editor", size)) {
-            if (ImGuiComponents.IconButton(PlayIcon)) {
+            if (ImGuiEx.IconButton(PlayIcon)) {
                 if (Exec.CurrentRoute != null)
                     Exec.Paused = !Exec.Paused;
                 if (Exec.CurrentRoute == null && route.Waypoints.Count > 0)
@@ -325,14 +325,14 @@ public class GatherWindow : Window {
 
             ImGui.PushStyleColor(ImGuiCol.Button, loop ? greenColor : redColor);
             ImGui.PushStyleColor(ImGuiCol.ButtonHovered, loop ? greenColor : redColor);
-            if (ImGuiComponents.IconButton(FontAwesomeIcon.SyncAlt))
+            if (ImGuiEx.IconButton(FontAwesomeIcon.SyncAlt))
                 loop ^= true;
             ImGui.PopStyleColor(2);
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(Localization.GetText(LocalizationKeys.Gathering.LoopRoute));
             ImGui.SameLine();
 
             if (Exec.CurrentRoute != null) {
-                if (ImGuiComponents.IconButton(FontAwesomeIcon.Stop))
+                if (ImGuiEx.IconButton(FontAwesomeIcon.Stop))
                     Exec.Finish();
                 if (ImGui.IsItemHovered()) ImGui.SetTooltip(Localization.GetText(LocalizationKeys.Gathering.StopRoute));
                 ImGui.SameLine();
@@ -340,7 +340,7 @@ public class GatherWindow : Window {
 
             var canDelete = !ImGui.GetIO().KeyCtrl;
             using (ImRaii.Disabled(canDelete)) {
-                if (ImGuiComponents.IconButton(FontAwesomeIcon.Trash)) {
+                if (ImGuiEx.IconButton(FontAwesomeIcon.Trash)) {
                     if (Exec.SourceRoute == route)
                         Exec.Finish();
                     RouteDB.Routes.Remove(route);
@@ -352,7 +352,7 @@ public class GatherWindow : Window {
             if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(Localization.GetText(LocalizationKeys.Gathering.DeleteRouteHoldCtrl));
             ImGui.SameLine();
 
-            if (ImGuiComponents.IconButton(FontAwesomeIcon.FileExport)) {
+            if (ImGuiEx.IconButton(FontAwesomeIcon.FileExport)) {
                 ImGui.SetClipboardText(JsonConvert.SerializeObject(route));
             }
             if (ImGui.IsItemHovered()) {
@@ -362,21 +362,21 @@ public class GatherWindow : Window {
             }
 
             ImGui.SameLine();
-            if (ImGuiComponents.IconButton(FontAwesomeIcon.EllipsisH))
+            if (ImGuiEx.IconButton(FontAwesomeIcon.EllipsisH))
                 ImGui.OpenPopup("##MassEditing");
             DrawMassEditContextMenu(route);
 
             var name = route.Name;
             var group = route.Group;
 
-            ImGui.TextV(Localization.GetText(LocalizationKeys.Gathering.Name));
+            ImGuiEx.TextV(Localization.GetText(LocalizationKeys.Gathering.Name));
             ImGui.SameLine();
             if (ImGui.InputText("##name", ref name, 256)) {
                 route.Name = name;
                 RouteDB.NotifyModified();
             }
             ImGui.SameLine();
-            if (ImGuiComponents.IconButton(FontAwesomeIcon.Plus)) {
+            if (ImGuiEx.IconButton(FontAwesomeIcon.Plus)) {
                 Exec.Finish();
                 var player = Service.ObjectTable.LocalPlayer;
                 if (player != null) {
@@ -386,7 +386,7 @@ public class GatherWindow : Window {
             }
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(Localization.GetText(LocalizationKeys.Gathering.AddWaypointCurrentPosition));
             ImGui.SameLine();
-            if (ImGuiComponents.IconButton(FontAwesomeIcon.UserPlus)) {
+            if (ImGuiEx.IconButton(FontAwesomeIcon.UserPlus)) {
                 var target = Service.TargetManager.Target;
                 if (target != null) {
                     route.Waypoints.Add(new() { Position = target.Position, Radius = RouteDB.DefaultInteractionRadius, ZoneID = Service.ClientState.TerritoryType, InteractWithOID = target.BaseId, InteractWithName = target.Name.ToString().ToLower() });
@@ -396,7 +396,7 @@ public class GatherWindow : Window {
             }
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(Localization.GetText(LocalizationKeys.Gathering.AddWaypointInteractWithTarget));
 
-            ImGui.TextV(Localization.GetText(LocalizationKeys.Gathering.Group));
+            ImGuiEx.TextV(Localization.GetText(LocalizationKeys.Gathering.Group));
             ImGui.SameLine();
             if (ImGui.InputText("##group", ref group, 256)) {
                 route.Group = group;
@@ -436,7 +436,7 @@ public class GatherWindow : Window {
     }
 
     private void DrawWaypoint(Waypoint wp) {
-        if (ImGui.IconButton(FontAwesomeIcon.MapMarker) && Player.Available) {
+        if (ImGuiEx.IconButton(FontAwesomeIcon.MapMarker) && Player.Available) {
             wp.Position = Player.Position;
             wp.ZoneID = Service.ClientState.TerritoryType;
             RouteDB.NotifyModified();
@@ -449,7 +449,7 @@ public class GatherWindow : Window {
         if (ImGui.InputFloat(Localization.GetLabel(LocalizationKeys.Gathering.RadiusYalms, "Radius (yalms)"), ref wp.Radius))
             RouteDB.NotifyModified();
 
-        if (ImGuiComponents.IconButton(FontAwesomeIcon.UserPlus)) {
+        if (ImGuiEx.IconButton(FontAwesomeIcon.UserPlus)) {
             if (wp.InteractWithOID == default) {
                 var target = Service.TargetManager.Target;
                 if (target != null) {
@@ -465,13 +465,13 @@ public class GatherWindow : Window {
         }
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(Localization.GetText(LocalizationKeys.Gathering.AddRemoveTargetFromWaypoint));
         ImGui.SameLine();
-        if (ImGui.IconButton(FontAwesomeIcon.CommentDots)) {
+        if (ImGuiEx.IconButton(FontAwesomeIcon.CommentDots)) {
             wp.showInteractions ^= true;
             RouteDB.NotifyModified();
         }
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(Localization.GetText(LocalizationKeys.Gathering.ToggleInteractions));
         ImGui.SameLine();
-        if (ImGui.IconButton(FontAwesomeIcon.Clock)) {
+        if (ImGuiEx.IconButton(FontAwesomeIcon.Clock)) {
             wp.showWaits ^= true;
             RouteDB.NotifyModified();
         }
@@ -503,7 +503,7 @@ public class GatherWindow : Window {
 
     private void ContextMenuGroup(string group) {
         var old = group;
-        ImGui.TextV(Localization.GetText(LocalizationKeys.Gathering.Name));
+        ImGuiEx.TextV(Localization.GetText(LocalizationKeys.Gathering.Name));
         ImGui.SameLine();
         if (ImGui.InputText("##groupname", ref group, 256)) {
             RouteDB.Routes.Where(r => r.Group == old).ToList().ForEach(r => r.Group = group);

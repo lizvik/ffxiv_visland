@@ -3,6 +3,7 @@ namespace visland.Helpers;
 // Stable resource keys. Change display text in Localization/*.json, not these identifiers.
 public static class LocalizationKeys {
     public static class Common {
+        public const string OperationTimedOut = "Common.OperationTimedOut";
         public const string Apply = "Common.Apply";
         public const string ApplyAll = "Common.ApplyAll";
         public const string AutoCollect = "Common.AutoCollect";

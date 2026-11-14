@@ -24,6 +24,7 @@
   "Common.Next": "下一个",
   "Common.NextWeek": "下周",
   "Common.NothingToCollect": "没有可收获的物品！",
+  "Common.OperationTimedOut": "操作超时，请重试。",
   "Common.Operations": "操作",
   "Common.OvercapWarning": "警告：部分资源将超出库存上限！",
   "Common.Prev": "上一个",

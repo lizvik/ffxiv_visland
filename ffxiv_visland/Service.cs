@@ -1,4 +1,7 @@
 using Dalamud.IoC;
+using clib;
+using ECommons;
+using ECommons.Automation.NeoTaskManager;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using System;
@@ -35,25 +38,72 @@ public class Service {
     public static VislandIPC Visland { get; private set; } = null!;
     public static GatherRouteExec RouteExec { get; private set; } = null!;
 
-    public static void Init(IDalamudPluginInterface pi) {
+    private static bool _ecommonsInitialized;
+    private static bool _clibInitialized;
+
+    public static void Init(IDalamudPluginInterface pi, IDalamudPlugin plugin) {
+        pi.Create<Service>();
+        ECommonsMain.ReducedLogging = true;
+        var minimumLogLevel = Log.MinimumLogLevel;
         try {
-            pi.Create<Service>();
+            ECommonsMain.Init(pi, plugin);
+            _ecommonsInitialized = true;
+        }
+        finally {
+            Log.MinimumLogLevel = minimumLogLevel;
+        }
+        try {
+            // Movement tasks run individually; the global clib automation scheduler is unnecessary.
+            CLibMain.Init(pi, plugin);
+            _clibInitialized = true;
             Config = new();
             Config.Initialize(pi.ConfigFile);
-            TaskManager = new TaskManager { AbortOnTimeout = true, TimeLimitMS = 20000 };
+            TaskManager = new TaskManager(new TaskManagerConfiguration {
+                AbortOnTimeout = true,
+                AbortOnError = true,
+                TimeLimitMS = 20000,
+                ShowDebug = false,
+                OnTaskException = ReportTaskException,
+                OnTaskTimeout = ReportTaskTimeout,
+            });
             Navmesh = new NavmeshIPC();
             RouteExec = new GatherRouteExec();
             Visland = new VislandIPC();
         }
         catch (Exception ex) {
-            Log.Error(ex, $"Error initalising {nameof(Service)}");
+            Log.Error(ex, $"Error initialising {nameof(Service)}");
+            Dispose();
+            throw;
         }
     }
 
+    private static void ReportTaskException(TaskManagerTask task, Exception exception, ref bool continueTask, ref bool? abort)
+        => ChatGui.PrintError(exception.Message);
+
+    private static void ReportTaskTimeout(TaskManagerTask task, ref long remainingTime)
+        => ChatGui.PrintError(Localization.GetText(LocalizationKeys.Common.OperationTimedOut));
+
     public static void Dispose() {
-        RouteExec.Dispose();
-        Navmesh.Dispose();
-        TaskManager.Dispose();
-        Config.Dispose();
+        try {
+            RouteExec?.Dispose();
+            Navmesh?.Dispose();
+            TaskManager?.Abort();
+            TaskManager?.Dispose();
+            Config?.Dispose();
+        }
+        finally {
+            try {
+                if (_clibInitialized) {
+                    _clibInitialized = false;
+                    CLibMain.Dispose();
+                }
+            }
+            finally {
+                if (_ecommonsInitialized) {
+                    _ecommonsInitialized = false;
+                    ECommonsMain.Dispose();
+                }
+            }
+        }
     }
 }

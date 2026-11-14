@@ -1,3 +1,4 @@
+using ECommons.ImGuiMethods;
 using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.Game.MJI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
@@ -117,7 +118,7 @@ public unsafe class WorkshopDebug {
             DrawFavourSetup(0, 4, 8);
             DrawFavourSetup(1, 6, 6);
             DrawFavourSetup(2, 8, 8);
-            ImGui.TextV(Localization.GetText(LocalizationKeys.Workshop.InitFromGameWeek));
+            ImGuiEx.TextV(Localization.GetText(LocalizationKeys.Workshop.InitFromGameWeek));
             ImGui.SameLine();
             if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Workshop.FetchDemand, "Fetch demand")))
                 WorkshopUtils.RequestDemandFavours();
@@ -198,7 +199,7 @@ public unsafe class WorkshopDebug {
     }
 
     private void DrawFavourSetup(int idx, int duration, int req) {
-        ImGui.TextV($"{duration}h:");
+        ImGuiEx.TextV($"{duration}h:");
         ImGui.SameLine();
         UICombo.UInt($"###c{idx}", _itemNames, ref _favourState.CraftObjectIds[idx], i => i != 0 && MJICraftworksObject.GetRow(i)?.CraftingTime == duration);
         ImGui.SameLine();

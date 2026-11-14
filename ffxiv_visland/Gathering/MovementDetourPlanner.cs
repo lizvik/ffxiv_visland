@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Threading.Tasks;
+using System.Threading;
 
 namespace visland.Gathering;
 
@@ -10,6 +11,7 @@ internal sealed class MovementDetourPlanner {
     private readonly Queue<Vector3> _candidates = new();
     private readonly HashSet<Vector3> _used = new();
     private Task<List<Vector3>>? _pending;
+    private CancellationTokenSource? _cancellation;
     private List<Vector3>? _firstLeg;
     private Vector3 _origin, _target, _via;
     private bool _fly;
@@ -18,6 +20,9 @@ internal sealed class MovementDetourPlanner {
     public bool Initialized { get; private set; }
 
     public void Reset() {
+        _cancellation?.Cancel();
+        _cancellation?.Dispose();
+        _cancellation = null;
         if (_pending != null)
             _ = _pending.ContinueWith(t => { _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted);
         _pending = null;
@@ -44,11 +49,15 @@ internal sealed class MovementDetourPlanner {
         Resume(origin);
     }
 
-    public void Resume(Vector3 origin) { _origin = origin; Active = true; }
+    public void Resume(Vector3 origin) {
+        _cancellation ??= new();
+        _origin = origin;
+        Active = true;
+    }
 
     // Null with Active=true means still calculating; null with Active=false means exhausted.
     public List<Vector3>? Tick(long now, Func<Vector3, Vector3?> project,
-        Func<Vector3, Vector3, bool, Task<List<Vector3>>?> pathfind) {
+        Func<Vector3, Vector3, bool, CancellationToken, Task<List<Vector3>>?> pathfind) {
         if (!Active) return null;
         if (_pending != null) {
             if (!_pending.IsCompleted) {
@@ -66,7 +75,7 @@ internal sealed class MovementDetourPlanner {
             }
             if (_firstLeg == null) {
                 _firstLeg = path;
-                _pending = pathfind(_via, _target, _fly);
+                _pending = pathfind(_via, _target, _fly, _cancellation!.Token);
                 _started = now;
                 if (_pending == null) _firstLeg = null;
                 return null;
@@ -81,7 +90,7 @@ internal sealed class MovementDetourPlanner {
             var projected = _fly ? candidate : project(candidate);
             if (!projected.HasValue || Vector3.DistanceSquared(_origin, projected.Value) < 4 || !_used.Add(projected.Value)) continue;
             _via = projected.Value;
-            _pending = pathfind(_origin, _via, _fly);
+            _pending = pathfind(_origin, _via, _fly, _cancellation!.Token);
             _started = now;
             if (_pending != null) return null;
         }

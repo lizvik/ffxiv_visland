@@ -36,9 +36,13 @@ public class NavmeshIPC : IDisposable {
     private readonly ICallGateSubscriber<float> _pathGetTolerance;
     private readonly ICallGateSubscriber<float, object> _pathSetTolerance;
     private readonly PathfindRequest _movementRequest = new();
+    private readonly GroundNavigationController _groundMovement;
     private bool _movementUsesVolume;
+    public string? LastRequestFailure { get; private set; }
 
-    public NavmeshIPC() {
+    public NavmeshIPC() : this(new ClibGroundMovementBackend()) { }
+
+    internal NavmeshIPC(IGroundMovementBackend groundBackend) {
         _navIsReady = Service.Interface.GetIpcSubscriber<bool>($"{Name}.Nav.IsReady");
         _navBuildProgress = Service.Interface.GetIpcSubscriber<float>($"{Name}.Nav.BuildProgress");
         _navReload = Service.Interface.GetIpcSubscriber<bool>($"{Name}.Nav.Reload");
@@ -61,6 +65,9 @@ public class NavmeshIPC : IDisposable {
         _pathSetAlignCamera = Service.Interface.GetIpcSubscriber<bool, object>($"{Name}.Path.SetAlignCamera");
         _pathGetTolerance = Service.Interface.GetIpcSubscriber<float>($"{Name}.Path.GetTolerance");
         _pathSetTolerance = Service.Interface.GetIpcSubscriber<float, object>($"{Name}.Path.SetTolerance");
+        _groundMovement = new(groundBackend, (path, volume) => {
+            if (_pathMoveTo.HasAction) _pathMoveTo.InvokeAction(path, volume);
+        });
         Service.Framework.Update += Update;
     }
 
@@ -98,14 +105,24 @@ public class NavmeshIPC : IDisposable {
 
     public void MoveTo(List<Vector3> waypoints, bool fly) {
         _movementRequest.Reset();
-        if (_pathMoveTo.HasAction) _pathMoveTo.InvokeAction(waypoints, fly);
+        LastRequestFailure = null;
+        _groundMovement.Follow(waypoints, fly);
     }
     public void Stop() {
         _movementRequest.Reset();
+        _groundMovement.Stop();
+        LastRequestFailure = null;
         if (_pathStop.HasAction) _pathStop.InvokeAction();
     }
     public bool IsRunning() => _pathIsRunning.HasFunction && _pathIsRunning.InvokeFunc();
     public List<Vector3>? ListWaypoints() => _pathListWaypoints.HasFunction ? _pathListWaypoints.InvokeFunc() : null;
+    public Vector3? CurrentWaypoint() {
+        var points = ListWaypoints();
+        if (points is not { Count: > 0 }) return null;
+        var point = points[0];
+        return float.IsFinite(point.X) && float.IsFinite(point.Y) && float.IsFinite(point.Z) ? point : null;
+    }
+    public int? RemainingWaypointCount() => _pathNumWaypoints.HasFunction ? _pathNumWaypoints.InvokeFunc() : null;
     public int NumWaypoints() => _pathNumWaypoints.HasFunction ? _pathNumWaypoints.InvokeFunc() : 0;
     public bool GetMovementAllowed() => _pathGetMovementAllowed.HasFunction && _pathGetMovementAllowed.InvokeFunc();
     public void SetMovementAllowed(bool value) { if (_pathSetMovementAllowed.HasAction) _pathSetMovementAllowed.InvokeAction(value); }
@@ -114,22 +131,34 @@ public class NavmeshIPC : IDisposable {
     public float GetTolerance() => _pathGetTolerance.HasFunction ? _pathGetTolerance.InvokeFunc() : 0;
     public void SetTolerance(float tolerance) { if (_pathSetTolerance.HasAction) _pathSetTolerance.InvokeAction(tolerance); }
 
-    public bool PathfindAndMoveTo(Vector3 pos, bool fly) {
-        if (_movementRequest.Pending) return false;
+    public bool PathfindAndMoveTo(Vector3 pos, bool fly, float? tolerance = null) {
+        if (_movementRequest.Pending || _groundMovement.Busy) return false;
+        LastRequestFailure = null;
+        if (!fly && !Player.InclusiveFlying) {
+            return _groundMovement.Request(pos, tolerance ?? Math.Max(0.1f, GetTolerance()));
+        }
         _movementUsesVolume = fly;
         return _movementRequest.Begin(Player.Position, pos, Environment.TickCount64,
             (from, to, cancellation) => PathfindCancelable(from, to, fly, cancellation));
     }
-    public bool PathfindInProgress() => _movementRequest.Pending;
+    public bool PathfindInProgress() => _movementRequest.Pending
+        || _groundMovement.Busy && (!_groundMovement.Following || !IsRunning());
 
     private void Update(IFramework framework) {
+        if (_groundMovement.Update() is { } failure) {
+            LastRequestFailure = failure;
+            Service.Log.Warning($"Navigation request failed: {failure}");
+        }
         var result = _movementRequest.Poll(Environment.TickCount64, path => MoveTo(path, _movementUsesVolume));
-        if (result != null && result != "query-applied")
+        if (result != null && result != "query-applied") {
+            LastRequestFailure = result;
             Service.Log.Warning($"Navigation request failed: {result}");
+        }
     }
 
     public void Dispose() {
         Service.Framework.Update -= Update;
         Stop();
+        _groundMovement.Dispose();
     }
 }

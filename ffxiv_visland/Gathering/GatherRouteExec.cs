@@ -1,4 +1,5 @@
 using FFXIVClientStructs.FFXIV.Client.Game.MJI;
+using ECommons.Throttlers;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Game.Text.SeStringHandling;
@@ -47,24 +48,12 @@ public class GatherRouteExec : IDisposable {
         AdjustingPosition,
     }
 
-    private readonly NavigationStuckDetector _stuck = new();
-    private readonly JumpRecovery _jumpRecovery = new();
+    private readonly MovementOperation _movement;
     private readonly GatheringActionGate _actionGate = new();
     private HashSet<string>? _localizedInventoryFullMessages;
     private readonly NavigationRecovery _recovery = new();
-    private readonly MovementDetourPlanner _detour = new();
     private int _recoveryWaypoint = -1;
-    private bool _navigationRequested;
-    private long _navigationRequestedAt;
-    private AutomaticMovementMode _movementMode;
-    private readonly MovementPathPlan _movementPlan = new();
-    private bool _movementModeSelected, _movementDistanceKnown;
-    private List<Vector3>? _plannedMovementPath;
-    private bool _plannedPathUsesVolume;
-    private Vector3 _plannedPathOrigin;
-    private long _mountAttemptAt, _takeoffAttemptAt;
     private readonly LandingController _landing = new();
-    private readonly PathfindRequest _landingPath = new();
     private float? _landingSavedTolerance;
     private bool _wasFlyingForWaypoint;
     private bool _landingDiagnosticsActive;
@@ -73,15 +62,17 @@ public class GatherRouteExec : IDisposable {
     private Vector3? _landingDiagnosticFloor;
     private bool? _landingDiagnosticPathAccepted;
     private int _landingFloorMisses, _landingPathRequests, _landingPathRejected;
-    private bool NavigationUsesVolume => AutomaticMovementPolicy.UsesVolume(_movementMode, Player.Mounted, Player.ExclusiveFlying, Player.IsDiving);
+    private bool NavigationUsesVolume => AutomaticMovementPolicy.UsesVolume(_movement.Mode, Player.Mounted, Player.ExclusiveFlying, Player.IsDiving);
     private bool _navigationWasDiving, _offMeshUsesVolume;
-    private readonly GroundShortcut _groundShortcut = new();
-    private readonly GroundShortcut _offMeshMovement = new();
     private long _nextOffMeshMoveAt;
     private long _nextShortcutMoveAt, _nextShortcutCheckAt;
-    private readonly Throttle _interact = new();
+    private readonly EzThrottler<string> _interact = new();
 
     public GatherRouteExec() {
+        _movement = new(() => Service.Navmesh.Stop(),
+            (path, volume) => Service.Navmesh.MoveTo(path, volume),
+            (target, volume) => Service.Navmesh.PathfindAndMoveTo(target, volume,
+                CurrentRoute?.Waypoints.ElementAtOrDefault(CurrentWaypoint)?.Radius));
         RouteDB = Service.Config.Get<GatherRouteDB>();
         Service.Framework.Update += Update;
         Service.ToastGui.ErrorToast += OnGatheringError;
@@ -120,20 +111,21 @@ public class GatherRouteExec : IDisposable {
     }
 
     public void Finish() {
+        _movement.Cancel();
         ResetMovementPlan();
-        _groundShortcut.Reset();
-        _offMeshMovement.Reset();
+        _movement.Shortcut.Reset();
+        _movement.OffMesh.Reset();
         if (_landingDiagnosticsActive)
             LogLandingDiagnostic("route-stopped", true);
         ResetLanding();
         ResetLandingDiagnostics();
         _actionGate.Reset();
-        _jumpRecovery.Reset();
-        _detour.Reset();
-        _stuck.Reset();
+        _movement.Jump.Reset();
+        _movement.Detour.Reset();
+        _movement.Stuck.Reset();
         _recovery.ResetRetries();
         _recoveryWaypoint = -1;
-        _navigationRequested = false;
+        _movement.Requested = false;
         SetState(State.None);
         if (CurrentRoute == null) return;
 
@@ -145,7 +137,7 @@ public class GatherRouteExec : IDisposable {
         Waiting = false;
         Paused = false;
         if (Pathfind)
-            Service.Navmesh.Stop();
+            _movement.StopNavigation();
     }
 
     public unsafe void Update(IFramework _) {
@@ -159,19 +151,25 @@ public class GatherRouteExec : IDisposable {
             return;
         }
         if (CurrentRoute != null && Paused) {
+            _movement.Cancel();
             ResetMovementPlan();
-            _groundShortcut.Cancel();
-            _offMeshMovement.Cancel();
+            _movement.Shortcut.Cancel();
+            _movement.OffMesh.Cancel();
             ResetLanding();
-            Service.Navmesh.Stop();
-            _navigationRequested = false;
+            _movement.StopNavigation();
+            _movement.Requested = false;
+        }
+        if (CurrentRoute != null && Service.TaskManager.IsBusy && _movement.Active) {
+            _movement.Cancel();
+            ResetMovementPlan();
+            ResetLanding();
         }
 
         if (!Player.Available || Player.IsCasting || Player.Mounting || (Player.IsJumping && !_landing.Active) || Paused || CurrentRoute == null || Service.TaskManager.IsBusy || CurrentWaypoint >= CurrentRoute.Waypoints.Count) {
             if (_landingDiagnosticsActive) LogLandingDiagnostic("waiting-player-state");
             _actionGate.Reset();
-            if (Paused || !Player.IsJumping) _jumpRecovery.Reset();
-            _stuck.Reset();
+            if (Paused || !Player.IsJumping) _movement.Jump.Reset();
+            _movement.Suspend();
             return;
         }
 
@@ -179,38 +177,52 @@ public class GatherRouteExec : IDisposable {
 
         if (AddonUtils.IsOccupied()) {
             if (_landingDiagnosticsActive) LogLandingDiagnostic("occupied");
-            _stuck.Reset(); _jumpRecovery.Reset(); _actionGate.Reset(); return;
+            _movement.Suspend(); _movement.Jump.Reset(); _actionGate.Reset(); return;
         }
 
         var wp = CurrentRoute.Waypoints[CurrentWaypoint];
-        if (_recoveryWaypoint != CurrentWaypoint) {
-            Service.Navmesh.Stop();
-            _navigationRequested = false;
+        if (!float.IsFinite(wp.Position.X) || !float.IsFinite(wp.Position.Y) || !float.IsFinite(wp.Position.Z)
+            || !float.IsFinite(wp.Radius) || wp.Radius < 0) {
+            Service.Log.Warning($"Waypoint {CurrentWaypoint + 1} has an invalid position or radius; stopping gathering.");
+            Finish();
+            return;
+        }
+        if (_recoveryWaypoint != CurrentWaypoint || _movement.Target != wp.Position) {
+            _movement.Begin(CurrentWaypoint, wp.Position);
+            _movement.StopNavigation();
+            _movement.Requested = false;
             _recovery.ResetRetries();
-            _detour.Reset();
-            _jumpRecovery.Reset();
+            _movement.Detour.Reset();
+            _movement.Jump.Reset();
             _actionGate.Reset();
             ResetLanding();
             ResetLandingDiagnostics();
             _wasFlyingForWaypoint = false;
-            _groundShortcut.Reset();
-            _offMeshMovement.Reset();
+            _movement.Shortcut.Reset();
+            _movement.OffMesh.Reset();
             _nextShortcutCheckAt = 0;
             _recoveryWaypoint = CurrentWaypoint;
             ResetMovementPlan();
         }
+        if (!_movement.Active && (_movement.Result != MovementResult.Arrived
+            || Vector3.DistanceSquared(Player.Position, wp.Position) > wp.Radius * wp.Radius)) {
+            _movement.Begin(CurrentWaypoint, wp.Position);
+            ResetMovementPlan();
+        }
         if (_navigationWasDiving != Player.IsDiving) {
+            _movement.Cancel();
+            _movement.Begin(CurrentWaypoint, wp.Position);
             // Queries are owned by this plugin, so a land/water transition can cancel them now.
-            Service.Navmesh.Stop();
-            _navigationRequested = false;
+            _movement.StopNavigation();
+            _movement.Requested = false;
             _navigationWasDiving = Player.IsDiving;
             ResetMovementPlan();
             _wasFlyingForWaypoint = false;
-            _detour.Reset();
-            _offMeshMovement.Reset();
-            _groundShortcut.Cancel();
-            _jumpRecovery.Reset();
-            _stuck.Reset();
+            _movement.Detour.Reset();
+            _movement.OffMesh.Reset();
+            _movement.Shortcut.Cancel();
+            _movement.Jump.Reset();
+            _movement.Stuck.Reset();
             ResetLanding();
             ResetLandingDiagnostics();
         }
@@ -218,24 +230,29 @@ public class GatherRouteExec : IDisposable {
         else if (_wasFlyingForWaypoint) {
             // A completed flight leg must not trigger another takeoff while approaching the node.
             _wasFlyingForWaypoint = false;
-            if (_movementMode == AutomaticMovementMode.Fly) _movementMode = AutomaticMovementMode.Ride;
+            if (_movement.Mode == AutomaticMovementMode.Fly) _movement.Mode = AutomaticMovementMode.Ride;
         }
         var toWaypoint = wp.Position - Player.Position;
         var horizontalDistance = new Vector2(toWaypoint.X, toWaypoint.Z).Length();
         if (_landing.Active || (Player.ExclusiveFlying && wp.InteractWithOID != 0 && horizontalDistance <= Math.Max(wp.Radius, 3))) {
             if (!EnsureGrounded()) return;
         }
-        var needToGetCloser = toWaypoint.LengthSquared() > wp.Radius * wp.Radius;
+        var needToGetCloser = !float.IsFinite(toWaypoint.LengthSquared()) || toWaypoint.LengthSquared() > wp.Radius * wp.Radius;
         if (Player.ExclusiveFlying && wp.InteractWithOID != 0 && horizontalDistance <= Math.Max(wp.Radius + 5, 8))
             LogLandingDiagnostic("approaching-node");
         Pathfind = true;
 
         if (needToGetCloser) {
+            if (_movement.CheckTimeout(Environment.TickCount64, _movement.Plan.Distance)) {
+                Service.Log.Warning($"Movement to waypoint {CurrentWaypoint + 1} timed out; recovering navigation.");
+                RecoverNavigation(MovementResult.TimedOut);
+                return;
+            }
             _actionGate.Reset();
-            if (_jumpRecovery.Active) {
-                var jumpResult = _jumpRecovery.Update(Player.Position, Environment.TickCount64);
+            if (_movement.Jump.Active) {
+                var jumpResult = _movement.Jump.Update(Player.Position, Environment.TickCount64);
                 if (jumpResult == JumpRecoveryResult.Pending) return;
-                _stuck.Reset();
+                _movement.Stuck.Reset();
                 if (jumpResult == JumpRecoveryResult.Failed) {
                     Service.Log.Information("Jump did not clear the obstacle; recovering navigation.");
                     RecoverNavigation();
@@ -248,30 +265,31 @@ public class GatherRouteExec : IDisposable {
             if (TryApplyPlannedMovement()) return;
             // Check throughout movement, including direct paths and detours, so an expired
             // Isle Sprint can be renewed without waiting for another pathfinding request.
-            if ((_movementMode is AutomaticMovementMode.Walk or AutomaticMovementMode.Dive)
+            if ((_movement.Mode is AutomaticMovementMode.Walk or AutomaticMovementMode.Dive)
                 && Service.Navmesh.IsRunning())
                 Player.Sprint();
             if (UpdateOffMeshMovement(wp)) return;
             if (TryGroundShortcut(wp)) return;
-            if (_detour.Active) {
+            if (_movement.Detour.Active) {
                 if (!Service.Navmesh.IsReady()) { SetState(State.WaitingForNavmesh); return; }
                 SetState(State.Pathfinding);
-                var detourPath = _detour.Tick(Environment.TickCount64,
-                    p => Service.Navmesh.QueryMeshNearestPoint(p, 2, 5), Service.Navmesh.Pathfind);
+                var detourPath = _movement.Detour.Tick(Environment.TickCount64,
+                    p => Service.Navmesh.QueryMeshNearestPoint(p, 2, 5), Service.Navmesh.PathfindCancelable);
                 if (detourPath != null) {
-                    if (!_movementDistanceKnown && MovementPathPlan.TryCalculateDistance(Player.Position, detourPath, out var distance)) {
-                        _plannedPathUsesVolume = NavigationUsesVolume;
-                        _plannedMovementPath = detourPath;
-                        _plannedPathOrigin = Player.Position;
+                    if (!_movement.DistanceKnown && MovementPathPlan.TryCalculateDistance(Player.Position, detourPath, out var distance)) {
+                        _movement.PlannedPathUsesVolume = NavigationUsesVolume;
+                        _movement.PlannedPath = detourPath;
+                        _movement.PlannedPathIsDetour = true;
+                        _movement.PlannedPathOrigin = Player.Position;
                         SelectMovementMode(distance);
                         return;
                     }
-                    Service.Navmesh.MoveTo(detourPath, NavigationUsesVolume);
-                    _navigationRequested = true;
-                    _navigationRequestedAt = Environment.TickCount64;
+                    _movement.Follow(detourPath, NavigationUsesVolume);
+                    _movement.Requested = true;
+                    _movement.RequestedAt = Environment.TickCount64;
                     Service.Log.Information($"Using alternative movement path to waypoint {CurrentWaypoint + 1}.");
                 }
-                else if (!_detour.Active) {
+                else if (!_movement.Detour.Active) {
                     Service.ChatGui.PrintError(Localization.GetText(LocalizationKeys.Gathering.NoDetourAvailable));
                     Finish();
                 }
@@ -281,13 +299,14 @@ public class GatherRouteExec : IDisposable {
 
             if (Service.Navmesh.IsRunning()) {
                 SetState(State.WaitingForDestination);
-                if (_stuck.Update(Player.Position, wp.Position, CurrentWaypoint, Environment.TickCount64, RouteDB.StuckTimeoutSeconds)) {
+                if (_movement.Stuck.Update(Player.Position, wp.Position, CurrentWaypoint, Environment.TickCount64, RouteDB.StuckTimeoutSeconds,
+                    Service.Navmesh.CurrentWaypoint(), Service.Navmesh.RemainingWaypointCount())) {
                     if (Player.IsDiving) {
                         Service.Log.Information("Underwater movement stuck; recovering volume navigation without jumping.");
                         RecoverNavigation();
                     }
                     else {
-                        _jumpRecovery.Begin(Player.Position, Environment.TickCount64);
+                        _movement.Jump.Begin(Player.Position, Environment.TickCount64);
                         Service.Log.Information("Movement stuck; trying a jump while keeping navigation active.");
                         Player.Jump();
                     }
@@ -295,11 +314,12 @@ public class GatherRouteExec : IDisposable {
                 return;
             }
 
-            _stuck.Reset();
-            if (_navigationRequested && Service.Navmesh.IsReady() && !Service.Navmesh.PathfindInProgress()) {
+            _movement.Stuck.Reset();
+            if (_movement.Requested && Service.Navmesh.IsReady() && !Service.Navmesh.PathfindInProgress()) {
                 // Allow the IPC consumer time to start its asynchronous request.
-                if (Environment.TickCount64 - _navigationRequestedAt >= 500)
-                    RecoverNavigation();
+                if (Environment.TickCount64 - _movement.RequestedAt >= 500)
+                    RecoverNavigation(Service.Navmesh.LastRequestFailure != null
+                        ? MovementResult.PathfindingFailed : MovementResult.Stuck);
                 return;
             }
             if (!Service.Navmesh.IsEnabled) {
@@ -315,29 +335,30 @@ public class GatherRouteExec : IDisposable {
             // delayed by mounting/landing or a path that never acquired a valid polygon.
             if (TryBeginOffMeshMovement(wp)) return;
             SetState(State.Moving);
-            if (!Service.Navmesh.PathfindAndMoveTo(wp.Position, NavigationUsesVolume)) {
-                RecoverNavigation();
+            if (!_movement.Request(wp.Position, NavigationUsesVolume)) {
+                RecoverNavigation(MovementResult.PathfindingFailed);
                 return;
             }
 
-            _navigationRequested = true;
-            _navigationRequestedAt = Environment.TickCount64;
+            _movement.Requested = true;
+            _movement.RequestedAt = Environment.TickCount64;
             return;
         }
 
-        _movementPlan.Reset();
-        _plannedMovementPath = null;
-        _groundShortcut.Cancel();
-        _offMeshMovement.Cancel();
-        _jumpRecovery.Reset();
+        if (!_movement.Complete(Player.Position, wp.Radius, Player.ExclusiveFlying && wp.InteractWithOID != 0)) return;
+        _movement.Plan.Reset();
+        _movement.PlannedPath = null;
+        _movement.Shortcut.Cancel();
+        _movement.OffMesh.Cancel();
+        _movement.Jump.Reset();
         if (Player.ExclusiveFlying && wp.InteractWithOID != 0 && !EnsureGrounded()) return;
-        _stuck.Reset();
+        _movement.Stuck.Reset();
         _recovery.ResetRetries();
-        _detour.Reset();
-        _navigationRequested = false;
+        _movement.Detour.Reset();
+        _movement.Requested = false;
         // force stop at destination to avoid a bug wherein you interact with the object and keep moving for a period of time
         if (Pathfind)
-            Service.Navmesh.Stop();
+            _movement.StopNavigation();
 
         if (wp.InteractWithOID != 0) {
             // Stop first, then allow landing and dismount animations to settle before interacting.
@@ -366,7 +387,7 @@ public class GatherRouteExec : IDisposable {
                         StopForFullNode();
                         return;
                     }
-                    _interact.Exec(() => {
+                    if (_interact.Throttle("gather-interaction", 500)) {
                         if (_landingDiagnosticsActive) {
                             LogLandingDiagnostic("ready-to-interact", true);
                             ResetLandingDiagnostics();
@@ -374,7 +395,7 @@ public class GatherRouteExec : IDisposable {
                         SetState(State.Interacting);
                         Service.Log.Debug("Interacting...");
                         TargetSystem.Instance()->OpenObjectInteraction(interactObj);
-                    });
+                    }
                     return;
                 }
                 break;
@@ -430,7 +451,7 @@ public class GatherRouteExec : IDisposable {
 
     private bool TryBeginOffMeshMovement(GatherRouteDB.Waypoint waypoint, bool navigationFailed = false) {
         var diving = Player.IsDiving;
-        if (_offMeshMovement.Attempted || (NavigationUsesVolume && !diving) || Player.ExclusiveFlying
+        if (_movement.OffMesh.Attempted || (NavigationUsesVolume && !diving) || Player.ExclusiveFlying
             || (diving && !navigationFailed) || _landing.Active
             || !Service.Navmesh.IsReady() || Service.Navmesh.PathfindInProgress())
             return false;
@@ -442,14 +463,14 @@ public class GatherRouteExec : IDisposable {
         if (startOnMesh == true && targetOnMesh == true)
             return false;
 
-        Service.Navmesh.Stop();
-        _groundShortcut.Cancel();
-        _detour.Reset();
-        _navigationRequested = false;
+        _movement.StopNavigation();
+        _movement.Shortcut.Cancel();
+        _movement.Detour.Reset();
+        _movement.Requested = false;
         var now = Environment.TickCount64;
         // Bound each attempt even when normal stuck detection is disabled.
         var stallSeconds = RouteDB.StuckTimeoutSeconds > 0 ? Math.Clamp(RouteDB.StuckTimeoutSeconds, 1, 30) : 3;
-        _offMeshMovement.Begin(now, Player.DistanceTo(waypoint.Position), 30000, stallSeconds * 1000);
+        _movement.OffMesh.Begin(now, Player.DistanceTo(waypoint.Position), 30000, stallSeconds * 1000);
         _offMeshUsesVolume = diving;
         _nextOffMeshMoveAt = 0;
         SetState(State.Moving);
@@ -457,17 +478,17 @@ public class GatherRouteExec : IDisposable {
     }
 
     private bool UpdateOffMeshMovement(GatherRouteDB.Waypoint waypoint) {
-        if (!_offMeshMovement.Active)
+        if (!_movement.OffMesh.Active)
             return false;
         if (_offMeshUsesVolume != Player.IsDiving || Player.ExclusiveFlying) {
-            _offMeshMovement.Cancel();
-            Service.Navmesh.Stop();
+            _movement.OffMesh.Cancel();
+            _movement.StopNavigation();
             return false;
         }
         var now = Environment.TickCount64;
-        var action = _offMeshMovement.Update(now, Player.DistanceTo(waypoint.Position), !Player.IsDiving && !Player.Mounted && !Player.IsJumping);
+        var action = _movement.OffMesh.Update(now, Player.DistanceTo(waypoint.Position), !Player.IsDiving && !Player.Mounted && !Player.IsJumping);
         if (action == GroundShortcutAction.Fallback) {
-            Service.Navmesh.Stop();
+            _movement.StopNavigation();
             Service.Log.Warning($"[OffMeshMovement] waypoint={CurrentWaypoint + 1}; no progress or time limit, returning to navigation recovery.");
             RecoverNavigation();
             return true;
@@ -477,7 +498,7 @@ public class GatherRouteExec : IDisposable {
         }
         if (!Service.Navmesh.IsRunning() && now >= _nextOffMeshMoveAt) {
             // Path.MoveTo follows coordinates directly; underwater movement needs vertical control.
-            Service.Navmesh.MoveTo([waypoint.Position], _offMeshUsesVolume);
+            _movement.Follow([waypoint.Position], _offMeshUsesVolume);
             _nextOffMeshMoveAt = now + 1000;
         }
         SetState(State.Moving);
@@ -485,31 +506,31 @@ public class GatherRouteExec : IDisposable {
     }
 
     private bool TryGroundShortcut(GatherRouteDB.Waypoint waypoint) {
-        if (!RouteDB.GroundShortcuts || _movementMode == AutomaticMovementMode.Fly || Player.InclusiveFlying
-            || _landing.Active || _detour.Active || _recovery.Retries > 0) {
-            if (_groundShortcut.Active) {
-                _groundShortcut.Cancel();
-                Service.Navmesh.Stop();
-                _navigationRequested = false;
+        if (!RouteDB.GroundShortcuts || _movement.Mode == AutomaticMovementMode.Fly || Player.InclusiveFlying
+            || _landing.Active || _movement.Detour.Active || _recovery.Retries > 0) {
+            if (_movement.Shortcut.Active) {
+                _movement.Shortcut.Cancel();
+                _movement.StopNavigation();
+                _movement.Requested = false;
             }
             return false;
         }
         var now = Environment.TickCount64;
         var distance = Player.DistanceTo(waypoint.Position);
-        if (!_groundShortcut.Active) {
-            if (_groundShortcut.Attempted || Service.Navmesh.PathfindInProgress() || now < _nextShortcutCheckAt) return false;
+        if (!_movement.Shortcut.Active) {
+            if (_movement.Shortcut.Attempted || Service.Navmesh.PathfindInProgress() || now < _nextShortcutCheckAt) return false;
             _nextShortcutCheckAt = now + 500;
             if (!GroundShortcut.CanTraverse(Player.Position, waypoint.Position, GroundCollision.ClearBody, GroundCollision.FloorBelow)) return false;
-            _groundShortcut.Begin(now, distance);
-            Service.Navmesh.Stop();
-            _navigationRequested = false;
+            _movement.Shortcut.Begin(now, distance);
+            _movement.StopNavigation();
+            _movement.Requested = false;
             _nextShortcutMoveAt = now;
             Service.Log.Debug($"[GroundShortcut] trying direct movement to waypoint {CurrentWaypoint + 1}, distance={distance:F2}");
         }
-        var action = _groundShortcut.Update(now, distance, !Player.Mounted && !Player.IsJumping);
+        var action = _movement.Shortcut.Update(now, distance, !Player.Mounted && !Player.IsJumping);
         if (action == GroundShortcutAction.Fallback) {
-            Service.Navmesh.Stop();
-            _navigationRequested = false;
+            _movement.StopNavigation();
+            _movement.Requested = false;
             Service.Log.Information($"[GroundShortcut] no progress or time limit; using vnavmesh for waypoint {CurrentWaypoint + 1}");
             return false;
         }
@@ -518,7 +539,7 @@ public class GatherRouteExec : IDisposable {
             Service.Log.Debug("[GroundShortcut] trying a jump while moving");
         }
         if (!Service.Navmesh.IsRunning() && now >= _nextShortcutMoveAt) {
-            Service.Navmesh.MoveTo([waypoint.Position], false);
+            _movement.Follow([waypoint.Position], false);
             _nextShortcutMoveAt = now + 1000;
         }
         SetState(State.Moving);
@@ -526,70 +547,84 @@ public class GatherRouteExec : IDisposable {
     }
 
     private void ResetMovementPlan() {
-        _movementPlan.Reset();
-        _plannedMovementPath = null;
-        _movementModeSelected = _movementDistanceKnown = false;
-        _movementMode = Player.IsDiving ? AutomaticMovementMode.Dive
+        _movement.Plan.Reset();
+        _movement.PlannedPath = null;
+        _movement.PlannedPathIsDetour = false;
+        _movement.ModeSelected = _movement.DistanceKnown = false;
+        _movement.Mode = Player.IsDiving ? AutomaticMovementMode.Dive
             : Player.ExclusiveFlying ? AutomaticMovementMode.Fly : AutomaticMovementMode.Walk;
-        _mountAttemptAt = _takeoffAttemptAt = 0;
+        _movement.MountAttemptAt = _movement.TakeoffAttemptAt = 0;
     }
 
     private void SelectMovementMode(float pathDistance) {
-        _movementMode = AutomaticMovementPolicy.Select(pathDistance, RouteDB.MountDistance, RouteDB.FlightDistance,
+        _movement.Mode = AutomaticMovementPolicy.Select(pathDistance, RouteDB.MountDistance, RouteDB.FlightDistance,
             RouteDB.AllowFlight, Player.IsDiving);
-        _movementModeSelected = _movementDistanceKnown = true;
-        _mountAttemptAt = _takeoffAttemptAt = 0;
+        _movement.ModeSelected = _movement.DistanceKnown = true;
+        _movement.MountAttemptAt = _movement.TakeoffAttemptAt = 0;
     }
 
     private bool EnsureMovementMode(GatherRouteDB.Waypoint waypoint) {
-        if (_movementModeSelected) return true;
+        if (_movement.ModeSelected) return true;
         if (!Service.Navmesh.IsReady()) {
             SetState(State.WaitingForNavmesh);
             return false;
         }
         // A manually moved character must not follow a cached path from an old origin.
-        if (_movementPlan.Started && Vector3.DistanceSquared(Player.Position, _movementPlan.Origin) > 9)
-            _movementPlan.Reset();
+        if (_movement.Plan.Started && Vector3.DistanceSquared(Player.Position, _movement.Plan.Origin) > 9)
+            _movement.Plan.Reset();
         var now = Environment.TickCount64;
-        if (!_movementPlan.Started)
-            _movementPlan.Begin(Player.Position, waypoint.Position, now, Player.InclusiveFlying,
+        if (!_movement.Plan.Started)
+            _movement.Plan.Begin(Player.Position, waypoint.Position, now, Player.InclusiveFlying,
                 RouteDB.AllowFlight && !Player.InclusiveFlying, Service.Navmesh.PathfindCancelable);
-        _movementPlan.Tick(now, Service.Navmesh.PathfindCancelable);
-        if (!_movementPlan.Ready) {
+        _movement.Plan.Tick(now, Service.Navmesh.PathfindCancelable);
+        if (!_movement.Plan.Ready) {
             SetState(State.Pathfinding);
             return false;
         }
-        if (_movementPlan.Distance.HasValue) {
-            SelectMovementMode(_movementPlan.Distance.Value);
-            _plannedMovementPath = _movementPlan.TakePath();
-            _plannedPathOrigin = _movementPlan.Origin;
-            _plannedPathUsesVolume = _movementPlan.UsesVolume;
+        if (_movement.Plan.Distance.HasValue) {
+            SelectMovementMode(_movement.Plan.Distance.Value);
+            _movement.PlannedPath = _movement.Plan.TakePath();
+            _movement.PlannedPathIsDetour = false;
+            _movement.PlannedPathOrigin = _movement.Plan.Origin;
+            _movement.PlannedPathUsesVolume = _movement.Plan.UsesVolume;
         }
         else {
             // A failed query has no distance. Keep the conservative mode and use existing recovery.
-            _movementModeSelected = true;
+            _movement.ModeSelected = true;
         }
         return true;
     }
 
     private bool TryApplyPlannedMovement() {
-        if (_plannedMovementPath == null) return false;
-        if (Vector3.DistanceSquared(Player.Position, _plannedPathOrigin) > 9) {
-            _plannedMovementPath = null;
+        if (_movement.PlannedPath == null) return false;
+        if (Vector3.DistanceSquared(Player.Position, _movement.PlannedPathOrigin) > 9) {
+            _movement.PlannedPath = null;
             return false;
         }
-        if (_plannedPathUsesVolume != NavigationUsesVolume) {
+        if (_movement.PlannedPathUsesVolume != NavigationUsesVolume) {
             // A volume-only path must wait for mounting/takeoff. Ground paths can be followed
             // while mounting, then replaced by a fresh volume path after takeoff.
-            if (_plannedPathUsesVolume && _movementMode == AutomaticMovementMode.Fly)
+            if (_movement.PlannedPathUsesVolume && _movement.Mode == AutomaticMovementMode.Fly)
                 return true;
-            _plannedMovementPath = null;
+            _movement.PlannedPath = null;
             return false;
         }
-        Service.Navmesh.MoveTo(_plannedMovementPath, _plannedPathUsesVolume);
-        _plannedMovementPath = null;
-        _navigationRequested = true;
-        _navigationRequestedAt = Environment.TickCount64;
+        if (!_movement.PlannedPathUsesVolume && !_movement.PlannedPathIsDetour && !Player.InclusiveFlying) {
+            // clib owns ordinary ground movement. Keep the sampled path distance for mode selection;
+            // its MoveTo performs the execution query. Detours keep their explicit via-point path.
+            if (Service.Navmesh.PathfindInProgress()) return true;
+            if (!_movement.Request(_movement.Target, false)) {
+                _movement.PlannedPath = null;
+                RecoverNavigation(MovementResult.PathfindingFailed);
+                return true;
+            }
+        }
+        else {
+            _movement.Follow(_movement.PlannedPath, _movement.PlannedPathUsesVolume);
+        }
+        _movement.PlannedPath = null;
+        _movement.Requested = true;
+        _movement.RequestedAt = Environment.TickCount64;
         SetState(State.Moving);
         return true;
     }
@@ -597,40 +632,40 @@ public class GatherRouteExec : IDisposable {
     private bool PrepareMovement() {
         // Short underwater legs use swimming; longer legs use the configured mount.
         // Both keep volume navigation, including while mounting and after a failed mount attempt.
-        if (Player.IsDiving && _movementMode != AutomaticMovementMode.DiveMounted) return true;
+        if (Player.IsDiving && _movement.Mode != AutomaticMovementMode.DiveMounted) return true;
         var now = Environment.TickCount64;
-        if (!Player.IsDiving && _movementMode != AutomaticMovementMode.Fly && Player.ExclusiveFlying && !EnsureGrounded()) return false;
-        if (_movementMode == AutomaticMovementMode.Walk && Player.Mounted) {
-            Service.Navmesh.Stop();
-            _navigationRequested = false;
+        if (!Player.IsDiving && _movement.Mode != AutomaticMovementMode.Fly && Player.ExclusiveFlying && !EnsureGrounded()) return false;
+        if (_movement.Mode == AutomaticMovementMode.Walk && Player.Mounted) {
+            _movement.StopNavigation();
+            _movement.Requested = false;
             ResetLanding();
             SetState(State.Dismounting);
             Player.Dismount();
             return false;
         }
-        if (_movementMode != AutomaticMovementMode.Walk && !Player.Mounted) {
-            if (_mountAttemptAt == 0) {
-                _mountAttemptAt = now;
+        if (_movement.Mode != AutomaticMovementMode.Walk && !Player.Mounted) {
+            if (_movement.MountAttemptAt == 0) {
+                _movement.MountAttemptAt = now;
                 SetState(State.Mounting);
             }
-            if (now - _mountAttemptAt >= 5000) {
-                _movementMode = Player.IsDiving ? AutomaticMovementMode.Dive : AutomaticMovementMode.Walk;
+            if (now - _movement.MountAttemptAt >= 5000) {
+                _movement.Mode = Player.IsDiving ? AutomaticMovementMode.Dive : AutomaticMovementMode.Walk;
                 return true;
             }
             Player.Mount(RouteDB.MountId);
             // Keep the current ground or underwater movement active while mounting.
             return true;
         }
-        if (_movementMode == AutomaticMovementMode.Fly && !Player.InclusiveFlying) {
-            if (_takeoffAttemptAt == 0) {
-                _takeoffAttemptAt = now;
+        if (_movement.Mode == AutomaticMovementMode.Fly && !Player.InclusiveFlying) {
+            if (_movement.TakeoffAttemptAt == 0) {
+                _movement.TakeoffAttemptAt = now;
                 // The ground path used during mounting must not survive takeoff.
-                Service.Navmesh.Stop();
-                _navigationRequested = false;
-                _detour.Reset();
+                _movement.StopNavigation();
+                _movement.Requested = false;
+                _movement.Detour.Reset();
             }
-            if (now - _takeoffAttemptAt >= 5000) {
-                _movementMode = AutomaticMovementMode.Ride;
+            if (now - _movement.TakeoffAttemptAt >= 5000) {
+                _movement.Mode = AutomaticMovementMode.Ride;
                 return true;
             }
             SetState(State.Jumping);
@@ -643,12 +678,12 @@ public class GatherRouteExec : IDisposable {
     private void StopLandingMovement() {
         if (_landing.Active)
             LogLandingDiagnostic($"stopping-{_landing.Phase}", true);
-        _landingPath.Reset();
-        Service.Navmesh.Stop();
+        _movement.LandingPath.Reset();
+        _movement.StopNavigation();
     }
 
     private void ResetLanding() {
-        _landingPath.Reset();
+        _movement.LandingPath.Reset();
         _landing.Reset();
         if (_landingSavedTolerance.HasValue) {
             Service.Navmesh.SetTolerance(_landingSavedTolerance.Value);
@@ -657,25 +692,25 @@ public class GatherRouteExec : IDisposable {
     }
 
     private bool EnsureGrounded() {
-        _stuck.Reset();
-        _jumpRecovery.Reset();
+        _movement.Suspend();
+        _movement.Jump.Reset();
         SetState(State.AdjustingPosition);
         var now = Environment.TickCount64;
         if (!_landing.Active && !Player.ExclusiveFlying) return true;
         if (!_landing.Active) {
             _landing.Begin(Player.Position, CurrentRoute!.Waypoints[CurrentWaypoint].Position, now,
                 Math.Clamp(RouteDB.StuckMaxRetries + 3, 4, 12));
-            Service.Navmesh.Stop();
-            _navigationRequested = false;
-            _detour.Reset();
+            _movement.StopNavigation();
+            _movement.Requested = false;
+            _movement.Detour.Reset();
             _landingSavedTolerance = Service.Navmesh.GetTolerance();
             Service.Navmesh.SetTolerance(0.1f);
             LogLandingDiagnostic("begin-descent", true);
         }
         if (_landing.Phase == LandingPhase.Calculating) {
-            var queryResult = _landingPath.Poll(now, path => {
+            var queryResult = _movement.LandingPath.Poll(now, path => {
                 if (_landing.PathApplied(now, Player.Position))
-                    Service.Navmesh.MoveTo(path, true);
+                    _movement.Follow(path, true);
             });
             if (queryResult != null) {
                 if (queryResult != "query-applied") {
@@ -688,7 +723,7 @@ public class GatherRouteExec : IDisposable {
         var previousPhase = _landing.Phase;
         var previousAttempt = _landing.Attempt;
         var result = _landing.Tick(now, Player.Position, Player.ExclusiveFlying,
-            Service.Navmesh.IsReady(), _landingPath.Pending || Service.Navmesh.IsRunning() || Service.Navmesh.PathfindInProgress(),
+            Service.Navmesh.IsReady(), _movement.LandingPath.Pending || Service.Navmesh.IsRunning() || Service.Navmesh.PathfindInProgress(),
             query => {
                 var floor = Service.Navmesh.QueryMeshPointOnFloor(query, false, 2);
                 _landingDiagnosticFloor = floor;
@@ -697,18 +732,18 @@ public class GatherRouteExec : IDisposable {
             },
             floor => {
                 ++_landingPathRequests;
-                var accepted = _landingPath.Begin(Player.Position, floor, now, Service.Navmesh.PathfindForLanding);
+                var accepted = _movement.LandingPath.Begin(Player.Position, floor, now, Service.Navmesh.PathfindForLanding);
                 _landingDiagnosticPathAccepted = accepted;
                 if (!accepted) ++_landingPathRejected;
                 return accepted;
             },
-            floor => { Service.Navmesh.MoveTo([floor], true); }, StopLandingMovement);
+            floor => { _movement.Follow([floor], true); }, StopLandingMovement);
         _landingDiagnosticFloor = _landing.Floor;
         if (result == LandingResult.Landed) {
             LogLandingDiagnostic("landed", true);
-            Service.Navmesh.Stop();
-            _navigationRequested = false;
-            if (_movementMode == AutomaticMovementMode.Fly) _movementMode = AutomaticMovementMode.Ride;
+            _movement.StopNavigation();
+            _movement.Requested = false;
+            if (_movement.Mode == AutomaticMovementMode.Fly) _movement.Mode = AutomaticMovementMode.Ride;
             _wasFlyingForWaypoint = false;
             _actionGate.Reset();
             ResetLanding();
@@ -752,14 +787,14 @@ public class GatherRouteExec : IDisposable {
             var remainingPath = Service.Navmesh.ListWaypoints();
             var pathPreview = remainingPath == null ? "unavailable" : string.Join("; ", remainingPath.Take(8));
             var floorDelta = _landingDiagnosticFloor.HasValue ? _landingDiagnosticFloor.Value.Y - position.Y : (float?)null;
-            var log = $"[Landing] phase={phase}, route='{CurrentRoute?.Name}', step={CurrentWaypoint + 1}, mode={_movementMode}, "
+            var log = $"[Landing] phase={phase}, route='{CurrentRoute?.Name}', step={CurrentWaypoint + 1}, mode={_movement.Mode}, "
                 + $"elapsedMs={elapsed}, descentElapsedMs={(_landing.Active ? now - _landing.StartedAt : 0)}, "
                 + $"position={position}, target={target}, horizontalDistance={new Vector2(delta.X, delta.Z).Length():F2}, targetDeltaY={delta.Y:F2}, "
                 + $"radius={waypoint?.Radius}, arrivalRadius={waypoint?.Radius}, "
                 + $"movementSinceLastLog={Vector3.Distance(position, _landingDiagnosticPrevious):F2}, heightChange={position.Y - _landingDiagnosticOrigin.Y:F2}, "
                 + $"inFlight={Player.ExclusiveFlying}, mounted={Player.Mounted}, jumping={Player.IsJumping}, mounting={Player.Mounting}, casting={Player.IsCasting}, "
                 + $"normal={Player.Normal}, animationLock={Player.AnimationLock:F2}, paused={Paused}, tasksBusy={Service.TaskManager.IsBusy}, state={CurrentState}, "
-                + $"meshReady={Service.Navmesh.IsReady()}, pathRunning={Service.Navmesh.IsRunning()}, pathPending={Service.Navmesh.PathfindInProgress()}, ownedLandingQueryPending={_landingPath.Pending}, "
+                + $"meshReady={Service.Navmesh.IsReady()}, pathRunning={Service.Navmesh.IsRunning()}, pathPending={Service.Navmesh.PathfindInProgress()}, ownedLandingQueryPending={_movement.LandingPath.Pending}, "
                 + $"pathWaypoints={Service.Navmesh.NumWaypoints()}, movementAllowed={Service.Navmesh.GetMovementAllowed()}, tolerance={Service.Navmesh.GetTolerance():F2}, "
                 + $"floor={_landingDiagnosticFloor}, floorDeltaY={floorDelta}, pathAccepted={_landingDiagnosticPathAccepted}, "
                 + $"landingStage={_landing.Phase}, landingCandidate={_landing.Attempt}, landingCandidates={_landing.CandidateCount}, descentSteps={_landing.DescentSteps}, descentTarget={_landing.DescentTarget}, floorDistanceToTarget={(target.HasValue && _landingDiagnosticFloor.HasValue ? Vector3.Distance(target.Value, _landingDiagnosticFloor.Value) : (float?)null)}, queryElapsedMs={(_landing.Phase == LandingPhase.Calculating ? now - _landing.QueryStartedAt : 0)}, noProgressMs={(_landing.Active ? now - _landing.LastProgressAt : 0)}, remainingPath=[{pathPreview}], floorMisses={_landingFloorMisses}, pathRequests={_landingPathRequests}, pathRejected={_landingPathRejected}";
@@ -773,32 +808,36 @@ public class GatherRouteExec : IDisposable {
         }
     }
 
-    private void RecoverNavigation() {
-        _jumpRecovery.Reset();
-        _navigationRequested = false;
-        Service.Navmesh.Stop();
-        _stuck.Reset();
+    private void RecoverNavigation(MovementResult failure = MovementResult.Stuck) {
+        _movement.Fail(failure);
+        _movement.RestartAttempt();
+        _movement.OffMesh.Cancel();
+        _movement.Shortcut.Cancel();
+        _movement.Jump.Reset();
+        _movement.Requested = false;
+        _movement.StopNavigation();
+        _movement.Stuck.Reset();
         if (CurrentRoute != null && TryBeginOffMeshMovement(CurrentRoute.Waypoints[CurrentWaypoint], navigationFailed: true))
             return;
         if (_recovery.TryRetry(RouteDB.StuckMaxRetries)) {
-            Service.Log.Information($"Recalculating navigation to waypoint {CurrentWaypoint + 1}, retry {_recovery.Retries}/{RouteDB.StuckMaxRetries}.");
+            Service.Log.Information($"Recalculating navigation to waypoint {CurrentWaypoint + 1} ({failure}), retry {_recovery.Retries}/{RouteDB.StuckMaxRetries}.");
             SetState(State.Pathfinding);
             return;
         }
 
         var waypoint = CurrentRoute!.Waypoints[CurrentWaypoint];
         var fly = NavigationUsesVolume;
-        if (!_detour.Initialized)
-            _detour.Begin(Player.Position, waypoint.Position, fly);
+        if (!_movement.Detour.Initialized)
+            _movement.Detour.Begin(Player.Position, waypoint.Position, fly);
         else
-            _detour.Resume(Player.Position);
+            _movement.Detour.Resume(Player.Position);
         Service.ChatGui.Print(Localization.GetText(LocalizationKeys.Gathering.TryingDetour));
         SetState(State.Pathfinding);
     }
 
     private void SetState(State state) {
         if (state != State.WaitingForDestination)
-            _stuck.Reset();
+            _movement.Stuck.Reset();
         if (state != CurrentState) {
             CurrentState = state;
             Service.Log.Debug($"State: {CurrentState}");
@@ -857,7 +896,7 @@ public class GatherRouteExec : IDisposable {
         var error = message.TextValue;
         if (Player.IsJumping || GatheringActionGate.IsTransientJumpError(error)) {
             _actionGate.Reset();
-            _stuck.Reset();
+            _movement.Stuck.Reset();
             SetState(State.WaitingForLanding);
             Service.Log.Debug($"Waiting for landing before retrying interaction: {error}");
             return;

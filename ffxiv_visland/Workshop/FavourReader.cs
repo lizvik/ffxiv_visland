@@ -1,4 +1,5 @@
 using FFXIVClientStructs.FFXIV.Client.Game.MJI;
+using ECommons.Automation.NeoTaskManager;
 using Lumina.Data;
 using Lumina.Excel.Sheets;
 using System;
@@ -52,17 +53,14 @@ internal unsafe class FavourReader(List<string> botNames) {
         return manager;
     }
 
-    public void EnsureDemandFavoursAvailable(List<Func<bool>> pendingActions) {
+    public void EnsureDemandFavoursAvailable(TaskManager tasks) {
         var manager = RequireManager();
         if (manager->DemandDirty || manager->FavorState == null || manager->FavorState->UpdateState != 2) {
             WorkshopUtils.RequestDemandFavours();
-            var started = Environment.TickCount64;
-            pendingActions.Add(() => {
+            tasks.Enqueue(() => {
                 var current = RequireManager();
-                if (Environment.TickCount64 - started >= 20000)
-                    throw new TimeoutException("Timed out waiting for workshop demand and favour data");
                 return !current->DemandDirty && current->FavorState != null && current->FavorState->UpdateState == 2;
-            });
+            }, "Wait for workshop demand and favours");
         }
     }
 

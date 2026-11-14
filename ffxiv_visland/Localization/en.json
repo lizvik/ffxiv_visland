@@ -24,6 +24,7 @@
   "Common.Next": "Next",
   "Common.NextWeek": "Next Week",
   "Common.NothingToCollect": "Nothing to collect!",
+  "Common.OperationTimedOut": "The operation timed out. Please try again.",
   "Common.Operations": "Operations",
   "Common.OvercapWarning": "Warning: some resources will overcap!",
   "Common.Prev": "Prev",

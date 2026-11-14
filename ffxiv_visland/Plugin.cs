@@ -37,7 +37,7 @@ public sealed class Plugin : IDalamudPlugin {
         if (!dir.Exists)
             dir.Create();
 
-        Service.Init(dalamud);
+        Service.Init(dalamud, this);
 
         P = this;
         _windowSystem.Add(new GatherWindow(), new WorkshopWindow(), new GranaryWindow(), new PastureWindow(), new FarmWindow(), new ExportWindow());

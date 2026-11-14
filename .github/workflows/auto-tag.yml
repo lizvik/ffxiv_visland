@@ -19,6 +19,7 @@ jobs:
       - name: Check out source and tags
         uses: actions/checkout@v5
         with:
+          submodules: recursive
           fetch-depth: 0
 
       - name: Sync version to repository metadata

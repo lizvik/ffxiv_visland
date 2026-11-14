@@ -1,3 +1,4 @@
+using ECommons.ImGuiMethods;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.Game.MJI;
@@ -67,13 +68,13 @@ unsafe class PastureWindow : UIAttachedWindow {
                 if (res != CollectResult.CanCollectSafely) {
                     ImGui.SameLine();
                     using (ImRaii.PushColor(ImGuiCol.Text, 0xff0000ff))
-                        ImGui.TextV(res == CollectResult.EverythingCapped ? Localization.GetText(LocalizationKeys.Common.InventoryFull) : Localization.GetText(LocalizationKeys.Common.OvercapWarning));
+                        ImGuiEx.TextV(res == CollectResult.EverythingCapped ? Localization.GetText(LocalizationKeys.Common.InventoryFull) : Localization.GetText(LocalizationKeys.Common.OvercapWarning));
                 }
             }
         }
         else {
             // TODO: think about any other global operations?
-            ImGui.TextV(Localization.GetText(LocalizationKeys.Common.NothingToCollect));
+            ImGuiEx.TextV(Localization.GetText(LocalizationKeys.Common.NothingToCollect));
         }
     }
 

@@ -1,5 +1,5 @@
+using ECommons.ImGuiMethods;
 using Dalamud.Game;
-using Dalamud.Interface.Components;
 using Dalamud.Interface.Textures;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Bindings.ImGui;
@@ -23,7 +23,6 @@ public unsafe class WorkshopOCImport {
     private readonly ClipboardParser _parser;
     private readonly ScheduleApplier _applier = new();
     private readonly FavourReader _favourReader;
-    private readonly List<Func<bool>> _pendingActions = [];
     private int _loadedSeason;
     private bool _loadedNextWeek;
 
@@ -36,19 +35,8 @@ public unsafe class WorkshopOCImport {
         _favourReader = new(_botNames);
     }
 
-    public void Update() {
-        try {
-            while (_pendingActions.Count > 0 && _pendingActions[0]())
-                _pendingActions.RemoveAt(0);
-        }
-        catch (Exception ex) {
-            _pendingActions.Clear();
-            ReportError(ex.Message);
-        }
-    }
-
     public void Draw() {
-        using var globalDisable = ImRaii.Disabled(_pendingActions.Count > 0);
+        using var globalDisable = ImRaii.Disabled(Service.TaskManager.IsBusy);
 
         var thisSeason = _seasonDB.CurrentSeason(false);
         var nextSeason = _seasonDB.CurrentSeason(true);
@@ -61,11 +49,11 @@ public unsafe class WorkshopOCImport {
         ImGui.SameLine();
         if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Workshop.LoadNextWeek, "Load Next Week")))
             LoadSeasonRecs(true);
-        ImGuiComponents.HelpMarker(Localization.GetText(LocalizationKeys.Workshop.LoadArchiveHelp));
+        ImGuiEx.HelpMarker(Localization.GetText(LocalizationKeys.Workshop.LoadArchiveHelp));
 
         if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Workshop.ImportRecommendationsFromClipboard, "Import Recommendations From Clipboard")))
             ImportRecsFromClipboard(false);
-        ImGuiComponents.HelpMarker(Localization.GetText(LocalizationKeys.Workshop.ClipboardImportHelp));
+        ImGuiEx.HelpMarker(Localization.GetText(LocalizationKeys.Workshop.ClipboardImportHelp));
 
         if (Recommendations.Empty)
             return;
@@ -77,9 +65,9 @@ public unsafe class WorkshopOCImport {
 
         if (_config.UseFavourSolver) {
             ImGui.TextUnformatted(Localization.GetText(LocalizationKeys.Workshop.AdvancedFavourOverrides));
-            ImGuiComponents.HelpMarker(Localization.GetText(LocalizationKeys.Workshop.ManualOverrideHelp));
+            ImGuiEx.HelpMarker(Localization.GetText(LocalizationKeys.Workshop.ManualOverrideHelp));
 
-            ImGui.TextV(Localization.GetText(LocalizationKeys.Workshop.Override4thWorkshopWithFavours));
+            ImGuiEx.TextV(Localization.GetText(LocalizationKeys.Workshop.Override4thWorkshopWithFavours));
             ImGui.SameLine();
             if (ImGui.Button($"This Week##4th"))
                 OverrideSideRecsLastWorkshopSolver(false);
@@ -87,7 +75,7 @@ public unsafe class WorkshopOCImport {
             if (ImGui.Button($"Next Week##4th"))
                 OverrideSideRecsLastWorkshopSolver(true);
 
-            ImGui.TextV(Localization.GetText(LocalizationKeys.Workshop.OverrideClosestWorkshopsWithFavours));
+            ImGuiEx.TextV(Localization.GetText(LocalizationKeys.Workshop.OverrideClosestWorkshopsWithFavours));
             ImGui.SameLine();
             if (ImGui.Button($"This Week##asap"))
                 OverrideSideRecsAsapSolver(false);
@@ -100,7 +88,7 @@ public unsafe class WorkshopOCImport {
             if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Workshop.OverrideClosestWorkshopsFromClipboard, "Override closest workshops from clipboard")))
                 OverrideSideRecsAsapClipboard();
 
-            if (ImGuiComponents.IconButtonWithText(Dalamud.Interface.FontAwesomeIcon.Clipboard, "Copy /favors (this week)")) {
+            if (ImGuiEx.IconButtonWithText(Dalamud.Interface.FontAwesomeIcon.Clipboard, "Copy /favors (this week)")) {
                 try {
                     ImGui.SetClipboardText(_favourReader.CreateFavourRequestCommand(false));
                 }
@@ -109,7 +97,7 @@ public unsafe class WorkshopOCImport {
                 }
             }
             ImGui.SameLine();
-            if (ImGuiComponents.IconButtonWithText(Dalamud.Interface.FontAwesomeIcon.Clipboard, "Copy /favors (next week)")) {
+            if (ImGuiEx.IconButtonWithText(Dalamud.Interface.FontAwesomeIcon.Clipboard, "Copy /favors (next week)")) {
                 try {
                     ImGui.SetClipboardText(_favourReader.CreateFavourRequestCommand(true));
                 }
@@ -121,7 +109,7 @@ public unsafe class WorkshopOCImport {
             ImGui.Separator();
         }
 
-        ImGui.TextV(Localization.GetText(LocalizationKeys.Workshop.SetSchedule));
+        ImGuiEx.TextV(Localization.GetText(LocalizationKeys.Workshop.SetSchedule));
         ImGui.SameLine();
         if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Common.ThisWeek, "This Week")))
             ApplyRecommendations(false);
@@ -154,8 +142,8 @@ public unsafe class WorkshopOCImport {
                 return;
             }
 
-            _favourReader.EnsureDemandFavoursAvailable(_pendingActions);
-            _pendingActions.Add(() => {
+            _favourReader.EnsureDemandFavoursAvailable(Service.TaskManager);
+            Service.TaskManager.Enqueue(() => {
                 try {
                     ApplySeason(nextWeek, _favourReader.ReadFavourState(nextWeek));
                 }
@@ -187,7 +175,7 @@ public unsafe class WorkshopOCImport {
 
         using var scrollSection = ImRaii.Child("ScrollableSection");
         foreach ((var c, var r) in Recommendations.Enumerate()) {
-            ImGui.TextV($"Cycle {c}:");
+            ImGuiEx.TextV($"Cycle {c}:");
             ImGui.SameLine();
             if (ImGui.Button($"Set on Active Cycle##{c}"))
                 _applier.ApplyRecommendationToCurrentCycle(r);
@@ -237,8 +225,8 @@ public unsafe class WorkshopOCImport {
     }
 
     private void OverrideSideRecsLastWorkshopSolver(bool nextWeek) {
-        _favourReader.EnsureDemandFavoursAvailable(_pendingActions);
-        _pendingActions.Add(() => {
+        _favourReader.EnsureDemandFavoursAvailable(Service.TaskManager);
+        Service.TaskManager.Enqueue(() => {
             OverrideSideRecsLastWorkshop(_favourReader.SolveRecOverrides(nextWeek));
             return true;
         });
@@ -268,8 +256,8 @@ public unsafe class WorkshopOCImport {
     }
 
     private void OverrideSideRecsAsapSolver(bool nextWeek) {
-        _favourReader.EnsureDemandFavoursAvailable(_pendingActions);
-        _pendingActions.Add(() => {
+        _favourReader.EnsureDemandFavoursAvailable(Service.TaskManager);
+        Service.TaskManager.Enqueue(() => {
             OverrideSideRecsAsap(_favourReader.SolveRecOverrides(nextWeek));
             return true;
         });

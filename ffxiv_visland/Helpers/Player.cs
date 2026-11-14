@@ -1,4 +1,5 @@
 using Dalamud.Game.ClientState.Conditions;
+using ECommons.Throttlers;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Game.ClientState.Statuses;
 using FFXIVClientStructs.FFXIV.Client.Game;
@@ -65,11 +66,11 @@ public static unsafe class Player {
         if (InWater && !onIsland) return;
         var actionType = onIsland ? ActionType.Action : ActionType.GeneralAction;
         var actionId = onIsland ? 31314u : 4u;
-        _sprint.Exec(() => {
+        if (_sprint.Throttle("sprint", 1000)) {
             var manager = ActionManager.Instance();
             if (manager != null && manager->GetActionStatus(actionType, actionId) == 0)
                 manager->UseAction(actionType, actionId);
-        }, 1);
+        }
     }
 
     public static bool SwitchJob(uint classJobId) {
@@ -87,9 +88,11 @@ public static unsafe class Player {
 
     public static int JobLevel(uint classJobId) => Service.PlayerState.GetClassJobLevel(ClassJob.GetRow(classJobId)!.Value);
 
-    private static void ExecuteActionSafe(ActionType type, uint id, uint extraParam = 0)
-        => _action.Exec(() => ActionManager.Instance()->UseAction(type, id, extraParam: extraParam));
+    private static void ExecuteActionSafe(ActionType type, uint id, uint extraParam = 0) {
+        if (_action.Throttle("action", 500))
+            ActionManager.Instance()->UseAction(type, id, extraParam: extraParam);
+    }
 
-    private static readonly Throttle _action = new();
-    private static readonly Throttle _sprint = new();
+    private static readonly EzThrottler<string> _action = new();
+    private static readonly EzThrottler<string> _sprint = new();
 }

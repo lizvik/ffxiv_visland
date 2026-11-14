@@ -1,3 +1,4 @@
+using ECommons.ImGuiMethods;
 using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.Game.MJI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
@@ -64,7 +65,7 @@ public unsafe class FarmWindow : UIAttachedWindow {
                 if (res != CollectResult.CanCollectSafely) {
                     ImGui.SameLine();
                     using (ImRaii.PushColor(ImGuiCol.Text, 0xff0000ff))
-                        ImGui.TextV(res == CollectResult.EverythingCapped ? Localization.GetText(LocalizationKeys.Common.InventoryFull) : Localization.GetText(LocalizationKeys.Common.OvercapWarning));
+                        ImGuiEx.TextV(res == CollectResult.EverythingCapped ? Localization.GetText(LocalizationKeys.Common.InventoryFull) : Localization.GetText(LocalizationKeys.Common.OvercapWarning));
                 }
             }
         }
@@ -105,7 +106,7 @@ public unsafe class FarmWindow : UIAttachedWindow {
 
                 ImGui.TableNextColumn();
                 using (ImRaii.PushColor(ImGuiCol.Text, full ? 0xff0000ff : 0xff00ffff, overcap))
-                    ImGui.TextV($"{slot.YieldName}: {inventory} + {slot.YieldAvailable} / 999");
+                    ImGuiEx.TextV($"{slot.YieldName}: {inventory} + {slot.YieldAvailable} / 999");
 
                 ImGui.TableNextColumn();
                 if (slot.YieldAvailable > 0) {

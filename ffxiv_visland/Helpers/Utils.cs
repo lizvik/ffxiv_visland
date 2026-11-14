@@ -1,4 +1,4 @@
-using Dalamud.Interface.Components;
+using ECommons.ImGuiMethods;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.Game;
@@ -173,7 +173,7 @@ public static unsafe class Utils {
     }
 
     public static bool EditNumberField(string labelBefore, float fieldWidth, ref int refValue, string labelAfter = "", string helpText = "") {
-        ImGui.TextV(labelBefore);
+        ImGuiEx.TextV(labelBefore);
 
         ImGui.SameLine();
 
@@ -183,11 +183,11 @@ public static unsafe class Utils {
 
         if (labelAfter != string.Empty) {
             ImGui.SameLine();
-            ImGui.TextV(labelAfter);
+            ImGuiEx.TextV(labelAfter);
         }
 
         if (helpText != string.Empty)
-            ImGuiComponents.HelpMarker(Localization.GetText(helpText));
+            ImGuiEx.HelpMarker(Localization.GetText(helpText));
 
         return clicked;
     }

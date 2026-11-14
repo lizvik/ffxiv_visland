@@ -21,6 +21,41 @@ try {
     if ($null -eq $manifestEntry -or $null -eq $assemblyEntry -or $assemblyEntry.Length -eq 0) {
         throw 'Release archive must contain visland.dll and visland.json at its root.'
     }
+    $ecommonsEntry = $archive.GetEntry('ECommons.dll')
+    if ($null -eq $ecommonsEntry -or $ecommonsEntry.Length -eq 0) {
+        throw 'Release archive must contain the ECommons dependency.'
+    }
+    $dependencyStream = $ecommonsEntry.Open()
+    $builtDependencyStream = [System.IO.File]::OpenRead((Join-Path $outputDirectory 'ECommons.dll'))
+    try {
+        $dependencyHash = [System.Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($dependencyStream))
+        $builtDependencyHash = [System.Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($builtDependencyStream))
+        if ($dependencyHash -cne $builtDependencyHash) {
+            throw 'Release archive contains an outdated ECommons dependency.'
+        }
+    } finally {
+        $dependencyStream.Dispose()
+        $builtDependencyStream.Dispose()
+    }
+    # clib uses these assemblies even when its optional sheet manager is not enabled.
+    foreach ($dependencyName in @('clib.dll', 'AllaganLib.GameSheets.dll', 'AllaganLib.Shared.dll', 'LuminaSupplemental.Excel.dll')) {
+        $entry = $archive.GetEntry($dependencyName)
+        if ($null -eq $entry -or $entry.Length -eq 0) {
+            throw "Release archive is missing dependency $dependencyName."
+        }
+        $packagedDependency = $entry.Open()
+        $builtDependency = [System.IO.File]::OpenRead((Join-Path $outputDirectory $dependencyName))
+        try {
+            $packagedHash = [System.Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($packagedDependency))
+            $builtHash = [System.Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($builtDependency))
+            if ($packagedHash -cne $builtHash) {
+                throw "Release archive contains an outdated $dependencyName."
+            }
+        } finally {
+            $packagedDependency.Dispose()
+            $builtDependency.Dispose()
+        }
+    }
     $reader = [System.IO.StreamReader]::new($manifestEntry.Open())
     try {
         $manifest = $reader.ReadToEnd() | ConvertFrom-Json

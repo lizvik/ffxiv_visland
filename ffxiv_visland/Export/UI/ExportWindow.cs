@@ -1,4 +1,5 @@
 using Dalamud.Interface.Utility.Raii;
+using ECommons.Throttlers;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Dalamud.Bindings.ImGui;
@@ -12,7 +13,7 @@ namespace visland.Export;
 unsafe class ExportWindow : UIAttachedWindow {
     private readonly ExportConfig _config;
     private readonly ExportDebug _debug = new();
-    private readonly Throttle _exportThrottle = new(); // export seems to close & reopen window?..
+    private readonly EzThrottler<string> _exportThrottle = new(); // export seems to close & reopen window?..
 
     public ExportWindow() : base(Localization.GetLabel(LocalizationKeys.Windows.ExportTitle, "Exports Automation"), "MJIDisposeShop", new(400, 600)) {
         _config = Service.Config.Get<ExportConfig>();
@@ -25,9 +26,8 @@ unsafe class ExportWindow : UIAttachedWindow {
     }
 
     public override void OnOpen() {
-        if (_config.AutoSell) {
-            _exportThrottle.Exec(AutoExport, 2);
-        }
+        if (_config.AutoSell && _exportThrottle.Throttle("export", 2000))
+            AutoExport();
     }
 
     public override void Draw() {
