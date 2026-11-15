@@ -75,6 +75,7 @@ public sealed class Plugin : IDalamudPlugin {
                     MoveToCommand(args, args[0] == "movedir");
                     break;
                 case "stop":
+                    Service.RareAnimalCapture.Stop();
                     Service.RouteExec.Finish();
                     break;
                 case "pause":

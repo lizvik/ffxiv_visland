@@ -14,7 +14,10 @@ public class VislandIPC {
         Service.Interface.GetIpcProvider<bool, object>("visland.SetRoutePaused")
             .RegisterAction(state => Service.RouteExec.Paused = state);
         Service.Interface.GetIpcProvider<object>("visland.StopRoute")
-            .RegisterAction(Service.RouteExec.Finish);
+            .RegisterAction(() => {
+                Service.RareAnimalCapture.Stop();
+                Service.RouteExec.Finish();
+            });
         Service.Interface.GetIpcProvider<string, bool, object>("visland.StartRoute")
             .RegisterAction((route, once) => {
                 var (_, json) = Utils.FromCompressedBase64(route);

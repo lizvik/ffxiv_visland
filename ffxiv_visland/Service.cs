@@ -8,6 +8,7 @@ using System;
 using visland.Gathering;
 using visland.Helpers;
 using visland.IPC;
+using visland.Pasture.RareAnimals;
 
 namespace visland;
 
@@ -37,6 +38,7 @@ public class Service {
     public static NavmeshIPC Navmesh { get; private set; } = null!;
     public static VislandIPC Visland { get; private set; } = null!;
     public static GatherRouteExec RouteExec { get; private set; } = null!;
+    internal static RareAnimalCapture RareAnimalCapture { get; private set; } = null!;
 
     private static bool _ecommonsInitialized;
     private static bool _clibInitialized;
@@ -68,6 +70,7 @@ public class Service {
             });
             Navmesh = new NavmeshIPC();
             RouteExec = new GatherRouteExec();
+            RareAnimalCapture = new();
             Visland = new VislandIPC();
         }
         catch (Exception ex) {
@@ -85,6 +88,7 @@ public class Service {
 
     public static void Dispose() {
         try {
+            RareAnimalCapture?.Dispose();
             RouteExec?.Dispose();
             Navmesh?.Dispose();
             TaskManager?.Abort();

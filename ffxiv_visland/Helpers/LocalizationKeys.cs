@@ -2,6 +2,67 @@ namespace visland.Helpers;
 
 // Stable resource keys. Change display text in Localization/*.json, not these identifiers.
 public static class LocalizationKeys {
+    public static class RareAnimals {
+        public const string Title = "RareAnimals.Title";
+        public const string Description = "RareAnimals.Description";
+        public const string OwnedDataUnavailable = "RareAnimals.OwnedDataUnavailable";
+        public const string ToolsHelp = "RareAnimals.ToolsHelp";
+        public const string Progress = "RareAnimals.Progress";
+        public const string CurrentConditions = "RareAnimals.CurrentConditions";
+        public const string Search = "RareAnimals.Search";
+        public const string Filter = "RareAnimals.Filter";
+        public const string All = "RareAnimals.All";
+        public const string Uncaptured = "RareAnimals.Uncaptured";
+        public const string Captured = "RareAnimals.Captured";
+        public const string AvailableOnly = "RareAnimals.AvailableOnly";
+        public const string Source = "RareAnimals.Source";
+        public const string NoResults = "RareAnimals.NoResults";
+        public const string Animal = "RareAnimals.Animal";
+        public const string Size = "RareAnimals.Size";
+        public const string Conditions = "RareAnimals.Conditions";
+        public const string Location = "RareAnimals.Location";
+        public const string Tools = "RareAnimals.Tools";
+        public const string OwnedCount = "RareAnimals.OwnedCount";
+        public const string Status = "RareAnimals.Status";
+        public const string NextAppearance = "RareAnimals.NextAppearance";
+        public const string NextAppearanceTime = "RareAnimals.NextAppearanceTime";
+        public const string Actions = "RareAnimals.Actions";
+        public const string Small = "RareAnimals.Small";
+        public const string Medium = "RareAnimals.Medium";
+        public const string Large = "RareAnimals.Large";
+        public const string AnyTime = "RareAnimals.AnyTime";
+        public const string AnyWeather = "RareAnimals.AnyWeather";
+        public const string Cave = "RareAnimals.Cave";
+        public const string FlightRequired = "RareAnimals.FlightRequired";
+        public const string ToolCount = "RareAnimals.ToolCount";
+        public const string Unknown = "RareAnimals.Unknown";
+        public const string Available = "RareAnimals.Available";
+        public const string Unavailable = "RareAnimals.Unavailable";
+        public const string Map = "RareAnimals.Map";
+        public const string Capture = "RareAnimals.Capture";
+        public const string Stop = "RareAnimals.Stop";
+        public const string Idle = "RareAnimals.Idle";
+        public const string Busy = "RareAnimals.Busy";
+        public const string IslandOnly = "RareAnimals.IslandOnly";
+        public const string PastureSelectionRequired = "RareAnimals.PastureSelectionRequired";
+        public const string ToolsMissing = "RareAnimals.ToolsMissing";
+        public const string UnavailableWindow = "RareAnimals.UnavailableWindow";
+        public const string CaveNearby = "RareAnimals.CaveNearby";
+        public const string NavmeshRequired = "RareAnimals.NavmeshRequired";
+        public const string NoFloor = "RareAnimals.NoFloor";
+        public const string Moving = "RareAnimals.Moving";
+        public const string SelectingTool = "RareAnimals.SelectingTool";
+        public const string ToolRequired = "RareAnimals.ToolRequired";
+        public const string Capturing = "RareAnimals.Capturing";
+        public const string Success = "RareAnimals.Success";
+        public const string NotFound = "RareAnimals.NotFound";
+        public const string Failed = "RareAnimals.Failed";
+        public const string CaptureError = "RareAnimals.CaptureError";
+        public const string ModeSwitchFailed = "RareAnimals.ModeSwitchFailed";
+        public const string TimedOut = "RareAnimals.TimedOut";
+        public const string Cancelled = "RareAnimals.Cancelled";
+    }
+
     public static class Common {
         public const string OperationTimedOut = "Common.OperationTimedOut";
         public const string Apply = "Common.Apply";

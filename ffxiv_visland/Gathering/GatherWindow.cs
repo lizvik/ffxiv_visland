@@ -14,12 +14,14 @@ using System.Linq;
 using System.Numerics;
 using visland.Helpers;
 using visland.IPC;
+using visland.Pasture.RareAnimals;
 using static visland.Gathering.GatherRouteDB;
 
 namespace visland.Gathering;
 
 public class GatherWindow : Window {
     private readonly UITree _tree = new();
+    private readonly RareAnimalPage _rareAnimals = new();
     private readonly List<System.Action> _postDraw = [];
 
     public GatherRouteDB RouteDB = null!;
@@ -70,6 +72,9 @@ public class GatherWindow : Window {
                         a();
                     _postDraw.Clear();
                 }
+            using (var tab = ImRaii.TabItem(Localization.GetLabel(LocalizationKeys.RareAnimals.Title)))
+                if (tab)
+                    _rareAnimals.Draw();
             using (var tab = ImRaii.TabItem(Localization.GetLabel(LocalizationKeys.Common.Settings, "Settings")))
                 if (tab)
                     DrawSettings();
@@ -324,8 +329,10 @@ public class GatherWindow : Window {
             ImGui.SameLine();
 
             if (Exec.CurrentRoute != null) {
-                if (ImGuiEx.IconButton(FontAwesomeIcon.Stop))
+                if (ImGuiEx.IconButton(FontAwesomeIcon.Stop)) {
+                    if (Service.RareAnimalCapture.Active) Service.RareAnimalCapture.Stop();
                     Exec.Finish();
+                }
                 if (ImGui.IsItemHovered()) ImGui.SetTooltip(Localization.GetText(LocalizationKeys.Gathering.StopRoute));
                 ImGui.SameLine();
             }

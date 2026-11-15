@@ -7,8 +7,8 @@ using visland.Helpers;
 namespace visland.Gathering;
 
 internal static unsafe class CompatModule {
-    public static void EnsureCompatibility(GatherRouteDB routeDB) {
-        if (routeDB.GatherModeOnStart && Player.IsOnIsland) {
+    public static void EnsureCompatibility(GatherRouteDB routeDB, bool ensureGatherMode = true) {
+        if (ensureGatherMode && routeDB.GatherModeOnStart && Player.IsOnIsland) {
             if (MJIManager.Instance()->CurrentMode != 1) {
                 if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("MJIHud", out var hud) && GenericHelpers.IsAddonReady(hud))
                     Callback.Fire(hud, false, 11, 0);

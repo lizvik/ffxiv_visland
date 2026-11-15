@@ -161,7 +161,7 @@ public class GatherRouteExec : IDisposable {
             return;
         }
 
-        CompatModule.EnsureCompatibility(RouteDB);
+        CompatModule.EnsureCompatibility(RouteDB, ensureGatherMode: Service.RareAnimalCapture?.Active != true);
 
         if (AddonUtils.IsOccupied()) {
             _dismount.Reset();
