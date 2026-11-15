@@ -52,7 +52,8 @@ public static class LocalizationKeys {
         public const string NoFloor = "RareAnimals.NoFloor";
         public const string Moving = "RareAnimals.Moving";
         public const string SelectingTool = "RareAnimals.SelectingTool";
-        public const string ToolRequired = "RareAnimals.ToolRequired";
+        public const string SwitchingTool = "RareAnimals.SwitchingTool";
+        public const string ToolSwitchFailed = "RareAnimals.ToolSwitchFailed";
         public const string Capturing = "RareAnimals.Capturing";
         public const string Success = "RareAnimals.Success";
         public const string NotFound = "RareAnimals.NotFound";

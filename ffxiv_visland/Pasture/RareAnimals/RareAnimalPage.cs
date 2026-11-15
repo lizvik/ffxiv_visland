@@ -4,6 +4,7 @@ using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
+using Dalamud.Interface;
 using Dalamud.Interface.Textures;
 using Dalamud.Interface.Utility.Raii;
 using Lumina.Excel.Sheets;
@@ -18,10 +19,13 @@ internal sealed class RareAnimalPage {
     private string _search = "";
     private int _filter;
     private bool _availableOnly;
+    private readonly Dictionary<uint, Vector2> _liveLocations = new();
+    private long _nextLocationRefresh;
 
     public void Draw() {
         var capture = Service.RareAnimalCapture;
         var snapshot = AnimalPastureSnapshot.Read();
+        RefreshLocations(snapshot);
         var hour = Utils.EorzeanHour();
         var now = DateTimeOffset.UtcNow;
         ImGui.TextWrapped(Localization.GetText(R.Description));
@@ -40,11 +44,17 @@ internal sealed class RareAnimalPage {
                 if (ImGui.SmallButton(Localization.GetLabel(R.Stop))) capture.Stop();
             }
         }
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextUnformatted(Localization.GetText(R.Search));
+        ImGui.SameLine();
         ImGui.SetNextItemWidth(220);
-        ImGui.InputText(Localization.GetLabel(R.Search), ref _search, 128);
+        ImGui.InputText("###" + R.Search, ref _search, 128);
+        ImGui.SameLine();
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextUnformatted(Localization.GetText(R.Filter));
         ImGui.SameLine();
         ImGui.SetNextItemWidth(130);
-        ImGui.Combo(Localization.GetLabel(R.Filter), ref _filter,
+        ImGui.Combo("###" + R.Filter, ref _filter,
             new[] { Localization.GetText(R.All), Localization.GetText(R.Uncaptured), Localization.GetText(R.Captured) }, 3);
         ImGui.Checkbox(Localization.GetLabel(R.AvailableOnly), ref _availableOnly);
         ImGui.SameLine();
@@ -78,8 +88,10 @@ internal sealed class RareAnimalPage {
             if (def.Flight) ImGui.TextWrapped(Localization.GetText(R.FlightRequired));
             ImGui.TableNextColumn();
             if (def.Cave) ImGui.TextUnformatted(Localization.GetText(R.Cave));
-            ImGui.TextUnformatted($"X:{def.X:0.#} Y:{def.Y:0.#}");
-            if (def.Alternate is { } alt) ImGui.TextUnformatted($"X:{alt.X:0.#} Y:{alt.Y:0.#}");
+            var location = _liveLocations.GetValueOrDefault(animal.Id, new(def.X, def.Y));
+            ImGui.TextUnformatted($"X:{location.X:0.0} Y:{location.Y:0.0}");
+            if (!_liveLocations.ContainsKey(animal.Id) && def.Alternate is { } alt)
+                ImGui.TextUnformatted($"X:{alt.X:0.0} Y:{alt.Y:0.0}");
             ImGui.TableNextColumn();
             ImGui.TextWrapped(animal.ToolName);
             if (snapshot.Known) ImGui.TextUnformatted(Localization.FormatText(R.ToolCount,
@@ -88,8 +100,15 @@ internal sealed class RareAnimalPage {
             ImGui.TextUnformatted(snapshot.Known ? snapshot.Counts.GetValueOrDefault(animal.Id).ToString()
                 : Localization.GetText(R.Unknown));
             ImGui.TableNextColumn();
-            ImGui.TextWrapped(Localization.GetText(!snapshot.Known ? R.Unknown
-                : def.Available(hour, snapshot.Weather) ? R.Available : R.Unavailable));
+            if (!snapshot.Known) ImGui.TextUnformatted(Localization.GetText(R.Unknown));
+            else {
+                var available = def.Available(hour, snapshot.Weather);
+                using var iconFont = ImRaii.PushFont(UiBuilder.IconFont);
+                using var iconColor = ImRaii.PushColor(ImGuiCol.Text, available
+                    ? new Vector4(0.2f, 0.85f, 0.3f, 1f) : new Vector4(1f, 0.25f, 0.25f, 1f));
+                ImGui.TextUnformatted((available
+                    ? FontAwesomeIcon.Check : FontAwesomeIcon.Times).ToIconString());
+            }
             ImGui.TableNextColumn();
             if (_forecast?.Next(def, now) is { } next) {
                 var wait = TimeSpan.FromSeconds(Math.Max(0, Math.Ceiling((next - now).TotalSeconds)));
@@ -100,11 +119,31 @@ internal sealed class RareAnimalPage {
             ImGui.TableNextColumn();
             if (ImGui.SmallButton(Localization.GetLabel(R.Map))) {
                 var map = RareAnimalCapture.TerritoryTypeMap();
-                if (map.HasValue) Service.GameGui.OpenMapWithMapLink(new MapLinkPayload(RareAnimalCatalog.Territory,
-                    map.Value.RowId, def.X, def.Y));
+                if (map.HasValue) {
+                    var live = snapshot.Known ? RareAnimalCapture.Find(animal, snapshot, targetableOnly: false) : null;
+                    var flag = live == null ? location
+                        : Dalamud.Utility.MapUtil.WorldToMap(new Vector2(live.Position.X, live.Position.Z), map.Value);
+                    Service.GameGui.OpenMapWithMapLink(new MapLinkPayload(RareAnimalCatalog.Territory,
+                        map.Value.RowId, flag.X, flag.Y));
+                }
             }
             if (ImGui.SmallButton(Localization.GetLabel(R.Capture))) capture.Start(animal);
             ImGui.PopID();
+        }
+    }
+
+    private void RefreshLocations(AnimalPastureSnapshot snapshot) {
+        if (!snapshot.Known) { _liveLocations.Clear(); _nextLocationRefresh = 0; return; }
+        var now = Environment.TickCount64;
+        if (now < _nextLocationRefresh) return;
+        _nextLocationRefresh = now + 500;
+        _liveLocations.Clear();
+        var map = RareAnimalCapture.TerritoryTypeMap();
+        if (!map.HasValue) return;
+        foreach (var animal in _animals) {
+            var live = RareAnimalCapture.Find(animal, snapshot, targetableOnly: false);
+            if (live != null) _liveLocations[animal.Id] = Dalamud.Utility.MapUtil.WorldToMap(
+                new Vector2(live.Position.X, live.Position.Z), map.Value);
         }
     }
 
