@@ -61,9 +61,8 @@ public class GatherRouteDB : Configuration.Node {
 
     public bool GroundShortcuts = true;
     public uint MountId;
-    public bool AllowFlight = true;
     public float MountDistance = 20;
-    public float FlightDistance = 40;
+    public bool AllowFlight = true;
     public int StuckTimeoutSeconds = 10;
     public int StuckMaxRetries = 3;
 
@@ -85,14 +84,14 @@ public class GatherRouteDB : Configuration.Node {
         StuckMaxRetries = Math.Clamp((int?)j["StuckMaxRetries"] ?? 3, 0, 20);
         StuckTimeoutSeconds = Math.Clamp((int?)j["StuckTimeoutSeconds"] ?? 10, 0, 300);
         MountId = (uint?)j["MountId"] ?? 0;
-        AllowFlight = (bool?)j["AllowFlight"] ?? true;
         MountDistance = Math.Clamp((float?)j["MountDistance"] ?? 20, 5, 100);
-        FlightDistance = Math.Clamp((float?)j["FlightDistance"] ?? 40, MountDistance, 200);
+        AllowFlight = (bool?)j["AllowFlight"] ?? true;
         GroundShortcuts = (bool?)j["GroundShortcuts"] ?? true;
         StopOnInventoryFull = (bool?)j["StopOnInventoryFull"] ?? (bool?)j["DisableOnErrors"] ?? false;
         GatherModeOnStart = (bool?)j["GatherModeOnStart"] ?? true;
         DefaultWaypointRadius = (float?)j["DefaultWaypointRadius"] ?? 3;
         DefaultInteractionRadius = (float?)j["DefaultInteractionRadius"] ?? 2;
+        // FlightDistance is obsolete: clib chooses ground travel or flight for mounted legs.
         // OptimizeRoutes is obsolete: waypoint order is always preserved.
         // Intentionally ignore obsolete extras (Food, GlobalFood, ExtractMateria, RepairGear,
         // RepairPercent, Desynth, AutoRetainerIntegration) and legacy keys: Manual, GlobalManual, WasFlyingInManual,
@@ -112,9 +111,8 @@ public class GatherRouteDB : Configuration.Node {
             { "Routes", res },
             { "GroundShortcuts", GroundShortcuts },
             { "MountId", MountId },
-            { "AllowFlight", AllowFlight },
             { "MountDistance", MountDistance },
-            { "FlightDistance", FlightDistance },
+            { "AllowFlight", AllowFlight },
             { "StuckTimeoutSeconds", StuckTimeoutSeconds },
             { "StuckMaxRetries", StuckMaxRetries },
             { "StopOnInventoryFull", StopOnInventoryFull },

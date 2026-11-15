@@ -12,17 +12,8 @@ internal sealed class MovementOperation(Action stopNavigation, Action<List<Vecto
     public NavigationStuckDetector Stuck { get; } = new();
     public JumpRecovery Jump { get; } = new();
     public MovementDetourPlanner Detour { get; } = new();
-    public MovementPathPlan Plan { get; } = new();
-    public PathfindRequest LandingPath { get; } = new();
     public GroundShortcut Shortcut { get; } = new();
     public GroundShortcut OffMesh { get; } = new();
-    public AutomaticMovementMode Mode;
-    public bool ModeSelected, DistanceKnown;
-    public List<Vector3>? PlannedPath;
-    public bool PlannedPathUsesVolume;
-    public bool PlannedPathIsDetour;
-    public Vector3 PlannedPathOrigin;
-    public long MountAttemptAt, TakeoffAttemptAt;
     public bool Requested;
     public long RequestedAt;
     public bool Active { get; private set; }
@@ -51,11 +42,11 @@ internal sealed class MovementOperation(Action stopNavigation, Action<List<Vecto
         catch { StopNavigation(); Result = LastFailure = MovementResult.PathfindingFailed; throw; }
     }
 
-    public bool Request(Vector3 target, bool volume) {
+    public bool Request(Vector3 target, bool allowFlight) {
         if (!Active) return false;
         _ownsNavigation = true;
         try {
-            if (requestPath(target, volume)) return true;
+            if (requestPath(target, allowFlight)) return true;
             Result = LastFailure = MovementResult.PathfindingFailed;
             return false;
         }
@@ -71,13 +62,11 @@ internal sealed class MovementOperation(Action stopNavigation, Action<List<Vecto
     }
 
     // Count only active movement updates; casting, mounting and interaction waits suspend the clock.
-    public bool CheckTimeout(long now, float? pathDistance) {
+    public bool CheckTimeout(long now) {
         if (!Active) return false;
         if (_lastTick is { } last && now >= last) _elapsed += now - last;
         _lastTick = now;
-        var budget = pathDistance is { } distance && float.IsFinite(distance)
-            ? Math.Max(30000d, distance / 2d * 1000d + 30000d) : 180000d;
-        if (_elapsed < budget) return false;
+        if (_elapsed < 180000) return false;
         Result = LastFailure = MovementResult.TimedOut;
         StopNavigation();
         return true;
@@ -113,12 +102,6 @@ internal sealed class MovementOperation(Action stopNavigation, Action<List<Vecto
 
     private void Release() {
         // Invalidate calculations before stopping movement, so late results cannot restart it.
-        Plan.Reset();
-        PlannedPath = null;
-        PlannedPathIsDetour = false;
-        ModeSelected = DistanceKnown = false;
-        MountAttemptAt = TakeoffAttemptAt = 0;
-        LandingPath.Reset();
         Detour.Reset();
         Jump.Reset();
         Shortcut.Reset();

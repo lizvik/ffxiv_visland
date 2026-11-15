@@ -14,6 +14,7 @@ public class NavmeshIPC : IDisposable {
     public const string Name = "vnavmesh";
 
     private readonly ICallGateSubscriber<bool> _navIsReady;
+    private readonly ICallGateSubscriber<bool> _simpleMovePending;
     private readonly ICallGateSubscriber<float> _navBuildProgress;
     private readonly ICallGateSubscriber<bool> _navReload;
     private readonly ICallGateSubscriber<bool> _navRebuild;
@@ -35,15 +36,18 @@ public class NavmeshIPC : IDisposable {
     private readonly ICallGateSubscriber<bool, object> _pathSetAlignCamera;
     private readonly ICallGateSubscriber<float> _pathGetTolerance;
     private readonly ICallGateSubscriber<float, object> _pathSetTolerance;
-    private readonly PathfindRequest _movementRequest = new();
-    private readonly GroundNavigationController _groundMovement;
-    private bool _movementUsesVolume;
+    private readonly NavigationController _navigation;
+    private readonly SimpleMoveDrain _simpleMoveDrain;
+    private (List<Vector3> Path, bool Volume)? _deferredPath;
+    public bool IsDrainingSimpleMove => _simpleMoveDrain.Active;
+    private bool _disposed;
     public string? LastRequestFailure { get; private set; }
 
-    public NavmeshIPC() : this(new ClibGroundMovementBackend()) { }
+    public NavmeshIPC() : this(null) { }
 
-    internal NavmeshIPC(IGroundMovementBackend groundBackend) {
+    internal NavmeshIPC(IMovementBackend? movementBackend) {
         _navIsReady = Service.Interface.GetIpcSubscriber<bool>($"{Name}.Nav.IsReady");
+        _simpleMovePending = Service.Interface.GetIpcSubscriber<bool>($"{Name}.SimpleMove.PathfindInProgress");
         _navBuildProgress = Service.Interface.GetIpcSubscriber<float>($"{Name}.Nav.BuildProgress");
         _navReload = Service.Interface.GetIpcSubscriber<bool>($"{Name}.Nav.Reload");
         _navRebuild = Service.Interface.GetIpcSubscriber<bool>($"{Name}.Nav.Rebuild");
@@ -65,7 +69,16 @@ public class NavmeshIPC : IDisposable {
         _pathSetAlignCamera = Service.Interface.GetIpcSubscriber<bool, object>($"{Name}.Path.SetAlignCamera");
         _pathGetTolerance = Service.Interface.GetIpcSubscriber<float>($"{Name}.Path.GetTolerance");
         _pathSetTolerance = Service.Interface.GetIpcSubscriber<float, object>($"{Name}.Path.SetTolerance");
-        _groundMovement = new(groundBackend, (path, volume) => {
+        _simpleMoveDrain = new(() => _simpleMovePending.HasFunction && _simpleMovePending.InvokeFunc(),
+            () => { if (_pathStop.HasAction) _pathStop.InvokeAction(); });
+        movementBackend ??= new ClibMovementBackend(
+            (from, to, cancellation) => PathfindCancelable(from, to, true, cancellation),
+            path => {
+                if (!_pathMoveTo.HasAction) throw new InvalidOperationException("vnavmesh Path.MoveTo is unavailable");
+                _pathMoveTo.InvokeAction(path, true);
+            },
+            () => { if (_pathStop.HasAction) _pathStop.InvokeAction(); }, IsRunning);
+        _navigation = new(movementBackend, (path, volume) => {
             if (_pathMoveTo.HasAction) _pathMoveTo.InvokeAction(path, volume);
         });
         Service.Framework.Update += Update;
@@ -79,8 +92,6 @@ public class NavmeshIPC : IDisposable {
     public void Rebuild() { if (_navRebuild.HasFunction) _navRebuild.InvokeFunc(); }
     public Task<List<Vector3>>? Pathfind(Vector3 from, Vector3 to, bool fly = false)
         => _navPathfind.HasFunction ? _navPathfind.InvokeFunc(from, to, fly) : null;
-    public Task<List<Vector3>>? PathfindForLanding(Vector3 from, Vector3 to, CancellationToken cancellation)
-        => PathfindCancelable(from, to, true, cancellation);
     public Task<List<Vector3>>? PathfindCancelable(Vector3 from, Vector3 to, bool fly, CancellationToken cancellation)
         => _navPathfindCancelable.HasFunction ? _navPathfindCancelable.InvokeFunc(from, to, fly, cancellation) : Pathfind(from, to, fly);
     public bool IsAutoLoad() => _navIsAutoLoad.HasFunction && _navIsAutoLoad.InvokeFunc();
@@ -104,13 +115,16 @@ public class NavmeshIPC : IDisposable {
         => _queryMeshPointOnFloor.HasFunction ? _queryMeshPointOnFloor.InvokeFunc(pos, allowUnlandable, halfExtentXZ) : null;
 
     public void MoveTo(List<Vector3> waypoints, bool fly) {
-        _movementRequest.Reset();
         LastRequestFailure = null;
-        _groundMovement.Follow(waypoints, fly);
+        if (IsDrainingSimpleMove) {
+            _deferredPath = (new(waypoints), fly);
+            return;
+        }
+        _navigation.Follow(waypoints, fly);
     }
     public void Stop() {
-        _movementRequest.Reset();
-        _groundMovement.Stop();
+        _deferredPath = null;
+        _navigation.Stop();
         LastRequestFailure = null;
         if (_pathStop.HasAction) _pathStop.InvokeAction();
     }
@@ -131,34 +145,43 @@ public class NavmeshIPC : IDisposable {
     public float GetTolerance() => _pathGetTolerance.HasFunction ? _pathGetTolerance.InvokeFunc() : 0;
     public void SetTolerance(float tolerance) { if (_pathSetTolerance.HasAction) _pathSetTolerance.InvokeAction(tolerance); }
 
-    public bool PathfindAndMoveTo(Vector3 pos, bool fly, float? tolerance = null) {
-        if (_movementRequest.Pending || _groundMovement.Busy) return false;
+    public bool PathfindAndMoveTo(Vector3 pos, bool allowFlight, float? tolerance = null,
+        uint mountId = 0, float mountDistance = 20) {
+        if (IsDrainingSimpleMove || _navigation.Busy) return false;
         LastRequestFailure = null;
-        if (!fly && !Player.InclusiveFlying) {
-            return _groundMovement.Request(pos, tolerance ?? Math.Max(0.1f, GetTolerance()));
-        }
-        _movementUsesVolume = fly;
-        return _movementRequest.Begin(Player.Position, pos, Environment.TickCount64,
-            (from, to, cancellation) => PathfindCancelable(from, to, fly, cancellation));
+        return _navigation.Request(pos, tolerance ?? Math.Max(0.1f, GetTolerance()), new(mountId, mountDistance, allowFlight));
     }
-    public bool PathfindInProgress() => _movementRequest.Pending
-        || _groundMovement.Busy && (!_groundMovement.Following || !IsRunning());
+    public bool MovementTaskBusy => _navigation.Busy;
+    public bool PathfindInProgress() => IsDrainingSimpleMove || _deferredPath.HasValue
+        || _navigation.Busy && (!_navigation.Following || !IsRunning());
 
     private void Update(IFramework framework) {
-        if (_groundMovement.Update() is { } failure) {
+        _simpleMoveDrain.Update();
+        if (IsDrainingSimpleMove) return;
+        if (_disposed) {
+            Service.Framework.Update -= Update;
+            return;
+        }
+        if (_deferredPath is { } deferred) {
+            _deferredPath = null;
+            _navigation.Follow(deferred.Path, deferred.Volume);
+        }
+        if (_navigation.Update() is { } failure) {
             LastRequestFailure = failure;
             Service.Log.Warning($"Navigation request failed: {failure}");
-        }
-        var result = _movementRequest.Poll(Environment.TickCount64, path => MoveTo(path, _movementUsesVolume));
-        if (result != null && result != "query-applied") {
-            LastRequestFailure = result;
-            Service.Log.Warning($"Navigation request failed: {result}");
         }
     }
 
     public void Dispose() {
-        Service.Framework.Update -= Update;
+        if (_disposed) return;
+        _disposed = true;
         Stop();
-        _groundMovement.Dispose();
+        _navigation.Dispose();
+        // A SimpleMove query outlives clib cancellation. Keep only its cleanup callback until drained.
+        if (!IsDrainingSimpleMove) Service.Framework.Update -= Update;
+    }
+
+    internal void DrainSimpleMove(Func<bool> cleanupCompleted) {
+        _simpleMoveDrain.Begin(cleanupCompleted);
     }
 }

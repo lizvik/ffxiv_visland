@@ -246,11 +246,10 @@ public class GatherWindow : Window {
             RouteDB.NotifyModified();
 
         Utils.DrawSection(Localization.GetText(LocalizationKeys.Gathering.OperationOptionsHeading), ImGuiColors.ParsedGold);
-        ImGui.TextUnformatted(Localization.GetText(LocalizationKeys.Gathering.NavmeshHelp));
-        ImGui.TextWrapped(Localization.GetText(LocalizationKeys.Gathering.PreserveWaypointOrderHelp));
 
         ImGui.TextUnformatted(Localization.GetText(LocalizationKeys.Gathering.AutomaticMovementHeading));
-        var mountPreview = RouteDB.MountId == 0 ? Localization.GetText(LocalizationKeys.Gathering.MountRoulette) : Mount.GetRow(RouteDB.MountId)?.Singular.ToString() ?? Localization.GetText(LocalizationKeys.Gathering.MountRoulette);
+        var mountPreview = RouteDB.MountId == 0 ? Localization.GetText(LocalizationKeys.Gathering.MountRoulette)
+            : Mount.GetRow(RouteDB.MountId)?.Singular.ToString() ?? Localization.GetText(LocalizationKeys.Gathering.MountRoulette);
         using (var mounts = ImRaii.Combo(Localization.GetLabel(LocalizationKeys.Gathering.Mount, "Mount"), mountPreview)) {
             if (mounts) {
                 if (ImGui.Selectable(Localization.GetText(LocalizationKeys.Gathering.MountRoulette), RouteDB.MountId == 0)) {
@@ -265,19 +264,12 @@ public class GatherWindow : Window {
                 }
             }
         }
-        if (ImGui.Checkbox(Localization.GetLabel(LocalizationKeys.Gathering.AllowFlight, "Allow flight"), ref RouteDB.AllowFlight))
-            RouteDB.NotifyModified();
         if (ImGui.SliderFloat(Localization.GetLabel(LocalizationKeys.Gathering.MountDistance, "Mount distance (yalms)"), ref RouteDB.MountDistance, 5, 100)) {
             RouteDB.MountDistance = Math.Clamp(RouteDB.MountDistance, 5, 100);
-            RouteDB.FlightDistance = Math.Max(RouteDB.FlightDistance, RouteDB.MountDistance);
             RouteDB.NotifyModified();
         }
-        using (ImRaii.Disabled(!RouteDB.AllowFlight)) {
-            if (ImGui.SliderFloat(Localization.GetLabel(LocalizationKeys.Gathering.FlightDistance, "Flight distance (yalms)"), ref RouteDB.FlightDistance, RouteDB.MountDistance, 200)) {
-                RouteDB.FlightDistance = Math.Clamp(RouteDB.FlightDistance, RouteDB.MountDistance, 200);
-                RouteDB.NotifyModified();
-            }
-        }
+        if (ImGui.Checkbox(Localization.GetLabel(LocalizationKeys.Gathering.AllowFlight, "Allow flight"), ref RouteDB.AllowFlight))
+            RouteDB.NotifyModified();
         ImGuiEx.HelpMarker(Localization.GetText(LocalizationKeys.Gathering.AutomaticMovementHelp));
 
         if (ImGui.Checkbox(Localization.GetLabel(LocalizationKeys.Gathering.GroundShortcuts, "Try short ground shortcuts"), ref RouteDB.GroundShortcuts))
