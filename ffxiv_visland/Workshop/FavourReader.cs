@@ -10,7 +10,7 @@ using visland.Helpers;
 namespace visland.Workshop;
 
 internal unsafe class FavourReader(List<string> botNames) {
-    public WorkshopSolver.FavourState ReadFavourState(bool nextWeek) {
+    public WorkshopSolver.FavourState ReadFavourState(bool nextWeek, bool includeScheduled = true) {
         var mji = RequireManager();
         var favour = mji->FavorState;
         if (favour == null || favour->UpdateState != 2)
@@ -19,7 +19,7 @@ internal unsafe class FavourReader(List<string> botNames) {
         var offset = nextWeek ? 6 : 3;
         for (var i = 0; i < 3; ++i) {
             state.CraftObjectIds[i] = favour->CraftObjectIds[i + offset];
-            state.CompletedCounts[i] = favour->NumDelivered[i + offset] + favour->NumScheduled[i + offset];
+            state.CompletedCounts[i] = favour->NumDelivered[i + offset] + (includeScheduled ? favour->NumScheduled[i + offset] : 0);
         }
         if (!mji->DemandDirty)
             state.Popularity.Set(nextWeek ? mji->NextPopularity : mji->CurrentPopularity);

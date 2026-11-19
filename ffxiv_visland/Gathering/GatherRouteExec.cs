@@ -373,7 +373,7 @@ public class GatherRouteExec : IDisposable {
             return;
         }
 
-        if (wp.WaitTimeET != default && wp.WaitTimeET != (Utils.EorzeanHour(), Utils.EorzeanMinute()).ToVec2()) return;
+        if (!Waiting && wp.WaitTimeET != default && wp.WaitTimeET != (Utils.EorzeanHour(), Utils.EorzeanMinute()).ToVec2()) return;
 
         if (!Waiting && wp.WaitTimeMs != default) {
             WaitUntil = Environment.TickCount64 + wp.WaitTimeMs;

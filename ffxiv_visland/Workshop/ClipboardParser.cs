@@ -1,4 +1,3 @@
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel;
 using Lumina.Excel.Sheets;
 using System;
@@ -9,7 +8,7 @@ using System.Text.RegularExpressions;
 namespace visland.Workshop;
 
 internal unsafe class ClipboardParser(ExcelSheet<MJICraftworksObject> craftSheet, List<string> botNames) {
-    public WorkshopSolver.Recs ParseRecs(string str) {
+    public WorkshopSolver.Recs ParseRecs(string str, int cycleInProgress) {
         var result = new WorkshopSolver.Recs();
 
         var curRec = new WorkshopSolver.DayRec();
@@ -40,7 +39,7 @@ internal unsafe class ClipboardParser(ExcelSheet<MJICraftworksObject> craftSheet
             else
                 Service.Log.Verbose($"Failed to parse {l}");
         }
-        result.Add(curCycle > 0 ? curCycle : (AgentMJICraftSchedule.Instance()->Data->CycleInProgress + 2) % 8, curRec);
+        result.Add(curCycle > 0 ? curCycle : (cycleInProgress + 1) % 7 + 1, curRec);
 
         return result;
     }

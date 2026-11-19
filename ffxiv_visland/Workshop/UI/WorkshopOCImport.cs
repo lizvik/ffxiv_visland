@@ -5,6 +5,7 @@ using Dalamud.Interface.Utility.Raii;
 using Dalamud.Bindings.ImGui;
 using Lumina.Excel;
 using Lumina.Excel.Sheets;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -127,8 +128,11 @@ public unsafe class WorkshopOCImport {
 
     public void ImportRecsFromClipboard(bool silent) {
         try {
-            Recommendations = RecalculateUnlockedRecipes(_parser.ParseRecs(ImGui.GetClipboardText()), notify: !silent);
+            var data = AgentMJICraftSchedule.Instance()->Data;
+            var parsed = _parser.ParseRecs(ImGui.GetClipboardText(), data->CycleInProgress);
+            Recommendations = RecalculateUnlockedRecipes(parsed, notify: !silent);
             _loadedSeason = 0;
+            _loadedNextWeek = false;
         }
         catch (Exception ex) {
             ReportError($"Error: {ex.Message}", silent);
@@ -145,7 +149,7 @@ public unsafe class WorkshopOCImport {
             _favourReader.EnsureDemandFavoursAvailable(Service.TaskManager);
             Service.TaskManager.Enqueue(() => {
                 try {
-                    ApplySeason(nextWeek, _favourReader.ReadFavourState(nextWeek));
+                    ApplySeason(nextWeek, _favourReader.ReadFavourState(nextWeek, includeScheduled: false));
                 }
                 catch (Exception ex) {
                     ReportError($"Error: {ex.Message}", silent);
@@ -161,9 +165,13 @@ public unsafe class WorkshopOCImport {
     private void ApplySeason(bool nextWeek, WorkshopSolver.FavourState? favours) {
         var season = _seasonDB.CurrentSeason(nextWeek);
         var baseRecs = RecalculateUnlockedRecipes(_seasonDB.BuildRecs(season), nextWeek);
+        var agent = AgentMJICraftSchedule.Instance();
+        if (agent == null || agent->Data == null)
+            throw new InvalidOperationException("Workshop schedule data is not available.");
         Recommendations = favours == null || _config.FavourMode == FavourMode.None
             ? baseRecs
-            : FavourIntegration.Apply(baseRecs, _config.FavourMode, favours.Value, _craftSheet, _seasonDB.RestCycles(season));
+            : FavourIntegration.Apply(baseRecs, _config.FavourMode, favours.Value, _craftSheet, _seasonDB.RestCycles(season),
+                nextWeek ? 0 : agent->Data->CycleInProgress + 1, nextWeek ? 0 : agent->Data->HourSinceCycleStart);
         _loadedSeason = season;
         _loadedNextWeek = nextWeek;
         Service.Log.Info($"Loaded workshop season {season} (favour mode {_config.FavourMode})");

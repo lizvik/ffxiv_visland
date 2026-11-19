@@ -21,40 +21,42 @@ public enum FavourMode {
 public static class FavourIntegration {
     public static readonly int[] FavourTargets = [8, 6, 8]; // 4h / 6h / 8h
 
-    public static WorkshopSolver.Recs Apply(WorkshopSolver.Recs baseRecs, FavourMode mode, WorkshopSolver.FavourState favours, ExcelSheet<MJICraftworksObject> sheet, IEnumerable<int>? ocRestCycles = null) {
+    public static WorkshopSolver.Recs Apply(WorkshopSolver.Recs baseRecs, FavourMode mode, WorkshopSolver.FavourState favours, ExcelSheet<MJICraftworksObject> sheet, IEnumerable<int>? ocRestCycles = null, int currentCycle = 0, int currentHour = 0) {
         baseRecs = WorkshopUtils.RecalculateRecipes(baseRecs);
         if (mode == FavourMode.None)
             return Clone(baseRecs);
 
-        var days = baseRecs.Enumerate().ToDictionary(e => e.cycle, e => CloneDay(e.rec));
+        var allDays = baseRecs.Enumerate().ToDictionary(e => e.cycle, e => CloneDay(e.rec));
+        var days = allDays.Where(d => d.Key >= currentCycle).ToDictionary(d => d.Key, d => d.Value);
+        var maxWorkshops = WorkshopUtils.GetMaxWorkshops();
+        if (mode == FavourMode.ReplaceWorkshop4 && maxWorkshops < 4)
+            return ToRecs(allDays);
         var freeRestCycle = 0;
         if (mode == FavourMode.MinMaxFreeRestDay) {
-            freeRestCycle = ocRestCycles?.Where(c => c is >= 2 and <= 7).OrderBy(c => c).FirstOrDefault() ?? 0;
+            freeRestCycle = ocRestCycles?.Where(c => c is >= 2 and <= 7 && (c > currentCycle || c == currentCycle && currentHour == 0)).OrderBy(c => c).FirstOrDefault() ?? 0;
             if (freeRestCycle != 0 && !days.ContainsKey(freeRestCycle))
                 days[freeRestCycle] = new WorkshopSolver.DayRec();
         }
 
-        var maxWorkshops = WorkshopUtils.GetMaxWorkshops();
         var credited = (int[])favours.CompletedCounts.Clone();
-        if (mode == FavourMode.ReplaceWorkshop4) {
-            // Credit exactly the physical workshops that will keep their schedules.
-            foreach (var day in days.Values)
-                foreach (var workshop in day.Enumerate(maxWorkshops, ignoreFourthWorkshop: true))
-                    CreditWorkshop(workshop.rec, favours.CraftObjectIds, credited, sheet);
+        void CreditRemainingDays(int[] counts) {
+            foreach (var (cycle, day) in days)
+                foreach (var workshop in day.Enumerate(maxWorkshops, ignoreFourthWorkshop: mode == FavourMode.ReplaceWorkshop4))
+                    CreditWorkshop(workshop.rec, favours.CraftObjectIds, counts, sheet,
+                        cycle == currentCycle ? currentHour : 0);
         }
-        else {
-            CreditSchedule(days.Values, favours.CraftObjectIds, credited, sheet, maxWorkshops);
-        }
+        CreditRemainingDays(credited);
 
         if (mode is FavourMode.MinMax or FavourMode.MinMaxFreeRestDay) {
-            foreach (var day in days.Values)
-                TrySubstitutions(day, favours.CraftObjectIds, credited, sheet, maxWorkshops);
+            foreach (var (cycle, day) in days)
+                TrySubstitutions(day, favours.CraftObjectIds, credited, sheet, maxWorkshops,
+                    cycle == currentCycle ? currentHour : 0);
             credited = (int[])favours.CompletedCounts.Clone();
-            CreditSchedule(days.Values, favours.CraftObjectIds, credited, sheet, maxWorkshops);
+            CreditRemainingDays(credited);
         }
 
         if (NeedsMet(credited))
-            return ToRecs(days);
+            return ToRecs(allDays);
 
         List<WorkshopSolver.WorkshopRec> favourDays;
         try {
@@ -62,25 +64,30 @@ public static class FavourIntegration {
         }
         catch (Exception ex) {
             Service.Log.Error($"Favour sheet solver failed: {ex.Message}");
-            return ToRecs(days);
+            return ToRecs(allDays);
         }
 
-        return mode switch {
-            FavourMode.ReplaceWorkshop4 => PlaceOnWorkshop4(days, favourDays),
+        // Full-day replacements must not overwrite a cycle that is already in progress.
+        var replaceableDays = days.Where(d => d.Key != currentCycle || currentHour == 0).ToDictionary(d => d.Key, d => d.Value);
+        var planned = mode switch {
+            FavourMode.ReplaceWorkshop4 => PlaceOnWorkshop4(replaceableDays, favourDays, maxWorkshops),
             FavourMode.MinMax or FavourMode.MinMaxFreeRestDay
-                => PlaceMinMax(days, favourDays, favours.Popularity, sheet, freeRestCycle),
+                => PlaceMinMax(replaceableDays, favourDays, favours.Popularity, sheet, freeRestCycle),
             _ => ToRecs(days),
         };
+        foreach (var (cycle, day) in planned.Enumerate()) allDays[cycle] = day;
+        return ToRecs(allDays);
     }
 
-    private static WorkshopSolver.Recs PlaceOnWorkshop4(Dictionary<int, WorkshopSolver.DayRec> days, List<WorkshopSolver.WorkshopRec> favourDays) {
+    private static WorkshopSolver.Recs PlaceOnWorkshop4(Dictionary<int, WorkshopSolver.DayRec> days, List<WorkshopSolver.WorkshopRec> favourDays, int maxWorkshops) {
+        if (maxWorkshops < 4) return ToRecs(days);
         var fi = 0;
         foreach (var cycle in days.Keys.OrderBy(c => c)) {
             if (fi >= favourDays.Count)
                 break;
             var day = days[cycle];
             EnsureWorkshopSlots(day, 2);
-            day.Workshops[1] = CloneWorkshop(favourDays[fi++]);
+            day.Workshops[^1] = CloneWorkshop(favourDays[fi++]);
         }
 
         if (fi < favourDays.Count)
@@ -106,7 +113,7 @@ public static class FavourIntegration {
                 continue;
             var day = days[cycle];
             EnsureWorkshopSlots(day, 2);
-            day.Workshops[1] = remaining.Dequeue();
+            day.Workshops[^1] = remaining.Dequeue();
         }
 
         // Grow to 3 then 4 distinct workshop schedules on low-value days (keeps main + prior overrides).
@@ -141,11 +148,12 @@ public static class FavourIntegration {
         return ToRecs(days);
     }
 
-    private static void TrySubstitutions(WorkshopSolver.DayRec day, uint[] favourIds, int[] complete, ExcelSheet<MJICraftworksObject> sheet, int maxWorkshops) {
+    private static void TrySubstitutions(WorkshopSolver.DayRec day, uint[] favourIds, int[] complete, ExcelSheet<MJICraftworksObject> sheet, int maxWorkshops, int minStartingHour = 0) {
         foreach (var copies in day.Enumerate(maxWorkshops).GroupBy(w => w.rec)) {
             var workshop = copies.Key;
             var copyCount = copies.Count();
             for (var i = 0; i < workshop.Slots.Count; ++i) {
+                if (workshop.Slots[i].Slot < minStartingHour) continue;
                 if (!TryRow(sheet, workshop.Slots[i].CraftObjectId, out var current))
                     continue;
 
@@ -199,7 +207,7 @@ public static class FavourIntegration {
                 CreditWorkshop(workshop.rec, favourIds, complete, sheet);
     }
 
-    public static void CreditWorkshop(WorkshopSolver.WorkshopRec workshop, uint[] favourIds, int[] complete, ExcelSheet<MJICraftworksObject> sheet) {
+    public static void CreditWorkshop(WorkshopSolver.WorkshopRec workshop, uint[] favourIds, int[] complete, ExcelSheet<MJICraftworksObject> sheet, int minStartingHour = 0) {
         MJICraftworksObject? prev = null;
         var previousEndHour = -1;
         foreach (var slot in workshop.Slots) {
@@ -208,7 +216,7 @@ public static class FavourIntegration {
             if (slot.Slot != previousEndHour)
                 prev = null;
             var idx = Array.IndexOf(favourIds, row.RowId);
-            if (idx >= 0)
+            if (idx >= 0 && slot.Slot >= minStartingHour)
                 complete[idx] += prev != null && WorkshopSolver.IsLinked(prev.Value, row) ? 2 : 1;
             prev = row;
             previousEndHour = slot.Slot + row.CraftingTime;
