@@ -203,17 +203,14 @@ public class GatherRouteDB : Configuration.Node {
         return res;
     }
 
+    internal static string GroupKey(string? name) {
+        var group = name?.Trim() ?? string.Empty;
+        return group.Equals("Ungrouped", StringComparison.OrdinalIgnoreCase) ? string.Empty : group;
+    }
+
     public static List<string> GetGroups(GatherRouteDB gatherRouteDB, bool sort = false) {
-        List<string> groups = ["Ungrouped"];
-        for (var g = 0; g < gatherRouteDB.Routes.Count; g++) {
-            if (string.IsNullOrEmpty(gatherRouteDB.Routes[g].Group))
-                gatherRouteDB.Routes[g].Group = "Ungrouped";
-            if (!groups.Contains(gatherRouteDB.Routes[g].Group))
-                groups.Add(gatherRouteDB.Routes[g].Group);
-        }
-        if (sort)
-            groups = [.. groups.OrderBy(i => i == "Ungrouped").ThenBy(i => i)];
-        return groups;
+        var groups = gatherRouteDB.Routes.Select(route => GroupKey(route.Group)).Append(string.Empty).Distinct();
+        return sort ? [.. groups.OrderBy(group => group.Length == 0).ThenBy(group => group)] : [.. groups];
     }
 
     public static void TryImport(GatherRouteDB routeDB) {

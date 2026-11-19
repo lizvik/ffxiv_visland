@@ -27,18 +27,15 @@ public class GatherWindow : Window {
     public GatherRouteDB RouteDB = null!;
     public GatherRouteExec Exec => Service.RouteExec;
 
-    private int selectedRouteIndex = -1;
+    private Route? _selectedRoute;
+    private string? _createRouteGroup;
+    private string _newRouteGroupName = string.Empty;
     private static bool loop;
 
     private Vector4 greenColor = new Vector4(0x5C, 0xB8, 0x5C, 0xFF) / 0xFF;
     private Vector4 redColor = new Vector4(0xD9, 0x53, 0x4F, 0xFF) / 0xFF;
 
     private string searchString = string.Empty;
-    private readonly List<Route> _filteredRoutes = [];
-    private bool _searchChanged;
-    private readonly HashSet<string> _openGroups = [];
-    private HashSet<string> _preSearchOpenGroups = [];
-    private List<Route> VisibleRoutes => searchString.Length > 0 ? _filteredRoutes : RouteDB.Routes;
     private FontAwesomeIcon PlayIcon => Exec.CurrentRoute != null && !Exec.Paused ? FontAwesomeIcon.Pause : FontAwesomeIcon.Play;
     private string PlayTooltip => Exec.CurrentRoute == null ? Localization.GetText(LocalizationKeys.Gathering.StartRoute) : Exec.Paused ? Localization.GetText(LocalizationKeys.Gathering.ResumeRoute) : Localization.GetText(LocalizationKeys.Gathering.PauseRoute);
 
@@ -112,11 +109,13 @@ public class GatherWindow : Window {
     private unsafe void DrawSidebar(Vector2 size) {
         using (ImRaii.Child("Sidebar", size, false)) {
             if (ImGuiEx.IconButton(FontAwesomeIcon.Plus)) {
-                RouteDB.Routes.Add(new() { Name = "Unnamed Route" });
-                RouteDB.NotifyModified();
+                _createRouteGroup = GroupKey(_selectedRoute?.Group);
+                _newRouteGroupName = string.Empty;
+                ImGui.OpenPopup("CreateRoute");
             }
 
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(Localization.GetText(LocalizationKeys.Gathering.CreateANewRoute));
+            var routeCreated = DrawCreateRoutePopup();
             ImGui.SameLine();
 
             if (ImGuiEx.IconButton(FontAwesomeIcon.FileImport))
@@ -130,65 +129,88 @@ public class GatherWindow : Window {
             ImGuiEx.TextV(Localization.GetText(LocalizationKeys.Gathering.Search));
             ImGui.SameLine();
             ImGui.SetNextItemWidth(-1);
-            var wasSearching = searchString.Length > 0;
-            if (ImGui.InputText("###RouteSearch", ref searchString, 500)) {
-                if (!wasSearching) // restored when the search is cleared
-                    _preSearchOpenGroups = [.. _openGroups];
-                _searchChanged = true;
-                RefreshFilteredRoutes();
-            }
-
+            ImGui.InputText("###RouteSearch", ref searchString, 500);
             ImGui.Separator();
 
             using (ImRaii.Child("routes")) {
                 var searching = searchString.Length > 0;
-                var matchCounts = VisibleRoutes.GroupBy(r => r.Group).ToDictionary(g => g.Key, g => g.Count());
-                if (!searching)
-                    _openGroups.Clear();
-
-                var groups = GetGroups(RouteDB, true);
+                // Search uses its own tree IDs so the normal expansion state survives filtering.
+                using var searchScope = ImRaii.PushId(searching ? "search" : "browse");
+                var groups = RouteDB.Routes.Select((route, index) => (route, index))
+                    .GroupBy(entry => GroupKey(entry.route.Group))
+                    .OrderBy(group => group.Key.Length == 0).ThenBy(group => group.Key);
                 foreach (var group in groups) {
-                    var matches = matchCounts.GetValueOrDefault(group);
-                    if (_searchChanged) // open groups with hits, or restore the pre-search layout
-                        ImGui.SetNextItemOpen(searching ? matches > 0 : _preSearchOpenGroups.Contains(group), ImGuiCond.Always);
-                    var groupLabel = searching ? $"{group} ({matches})" : group;
-                    var groupColor = searching && matches == 0 ? ImGui.GetColorU32(ImGuiCol.TextDisabled) : 0xffffffff;
-                    foreach (var _ in _tree.Node($"{groupLabel}###{groups.IndexOf(group)}", color: groupColor, contextMenu: () => ContextMenuGroup(group))) {
-                        if (!searching)
-                            _openGroups.Add(group);
-                        for (var i = 0; i < VisibleRoutes.Count; i++) {
-                            var route = VisibleRoutes[i];
-                            var routeGroup = string.IsNullOrEmpty(route.Group) ? "None" : route.Group;
-                            if (routeGroup == group) {
-                                var routeLabel = $"{route.Name} ({route.Waypoints.Count} steps)";
-                                if (searching) { // label drawn by hand so the match can be colored
-                                    var textPos = ImGui.GetCursorScreenPos();
-                                    if (ImGui.Selectable($"###{i}", i == selectedRouteIndex, ImGuiSelectableFlags.None, new Vector2(0, ImGui.GetTextLineHeight())))
-                                        selectedRouteIndex = i;
-                                    DrawHighlightedLabel(textPos, routeLabel, route.Name.Length);
-                                }
-                                else if (ImGui.Selectable($"{routeLabel}###{i}", i == selectedRouteIndex))
-                                    selectedRouteIndex = i;
-                                //if (ImRaii.ContextPopup($"{route.Name}{i}"))
-                                //{
-                                //    selectedRouteIndex = i;
-                                //    ContextMenuRoute(routeSource[i]);
-                                //}
+                    var name = GroupLabel(group.Key);
+                    var groupMatches = name.Contains(searchString, StringComparison.OrdinalIgnoreCase)
+                        || group.Key.Contains(searchString, StringComparison.OrdinalIgnoreCase);
+                    var routes = group.Where(entry => groupMatches
+                        || entry.route.Name.Contains(searchString, StringComparison.OrdinalIgnoreCase)).ToArray();
+                    if (routes.Length == 0) continue;
+                    if (searching || routeCreated && group.Key == _selectedRoute?.Group)
+                        ImGui.SetNextItemOpen(true, ImGuiCond.Always);
+
+                    using var groupScope = ImRaii.PushId(group.Key.Length == 0 ? "ungrouped" : "group:" + group.Key);
+                    var groupLabel = $"{name}###group";
+                    System.Action? rename = group.Key.Length == 0 ? null : () => ContextMenuGroup(group.Key);
+                    foreach (var _ in _tree.Node(groupLabel, contextMenu: rename)) {
+                        foreach (var (route, index) in routes) {
+                            using var routeScope = ImRaii.PushId(index);
+                            var label = $"{route.Name} ({route.Waypoints.Count} steps)";
+                            if (searching) {
+                                var position = ImGui.GetCursorScreenPos();
+                                if (ImGui.Selectable("###route", _selectedRoute == route, ImGuiSelectableFlags.None, new Vector2(0, ImGui.GetTextLineHeight())))
+                                    _selectedRoute = route;
+                                DrawHighlightedLabel(position, label, route.Name.Length);
+                            }
+                            else if (ImGui.Selectable($"{label}###route", _selectedRoute == route))
+                                _selectedRoute = route;
+
+                            if (ImGui.BeginPopupContextItem("route-group")) {
+                                ContextMenuRoute(route);
+                                ImGui.EndPopup();
                             }
                         }
                     }
                 }
-                _searchChanged = false;
             }
         }
     }
 
-    private void RefreshFilteredRoutes() {
-        _filteredRoutes.Clear();
-        if (searchString.Length == 0)
-            return;
+    private bool DrawCreateRoutePopup() {
+        using var popup = ImRaii.Popup("CreateRoute");
+        if (!popup) return false;
 
-        _filteredRoutes.AddRange(RouteDB.Routes.Where(route => route.Name.Contains(searchString, StringComparison.CurrentCultureIgnoreCase) || route.Group.Contains(searchString, StringComparison.CurrentCultureIgnoreCase)));
+        var newGroupLabel = Localization.GetText(LocalizationKeys.Gathering.CreateRouteNewGroup);
+        using (var combo = ImRaii.Combo(Localization.GetLabel(LocalizationKeys.Gathering.Group),
+            _createRouteGroup == null ? newGroupLabel : GroupLabel(_createRouteGroup))) {
+            if (combo) {
+                var groups = GetGroups(RouteDB, true);
+                for (var i = 0; i < groups.Count; ++i) {
+                    var group = groups[i];
+                    if (ImGui.Selectable($"{GroupLabel(group)}###existing-{i}", group == _createRouteGroup))
+                        _createRouteGroup = group;
+                }
+                if (ImGui.Selectable($"{newGroupLabel}###new", _createRouteGroup == null))
+                    _createRouteGroup = null;
+            }
+        }
+
+        if (_createRouteGroup == null)
+            ImGui.InputText(Localization.GetLabel(LocalizationKeys.Gathering.CreateRouteGroupName), ref _newRouteGroupName, 256);
+        var targetGroup = _createRouteGroup ?? GroupKey(_newRouteGroupName);
+        using (ImRaii.Disabled(_createRouteGroup == null && targetGroup.Length == 0)) {
+            if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Gathering.CreateANewRoute))) {
+                _selectedRoute = new() { Name = "Unnamed Route", Group = targetGroup };
+                RouteDB.Routes.Add(_selectedRoute);
+                RouteDB.NotifyModified();
+                searchString = string.Empty;
+                ImGui.CloseCurrentPopup();
+                return true;
+            }
+        }
+        ImGui.SameLine();
+        if (ImGui.Button(Localization.GetLabel(LocalizationKeys.Common.Cancel))) ImGui.CloseCurrentPopup();
+        return false;
     }
 
     // only the first searchableLength chars get matched, so the "(x steps)" suffix never lights up
@@ -304,11 +326,8 @@ public class GatherWindow : Window {
     }
 
     private void DrawEditor(Vector2 size) {
-        if (selectedRouteIndex == -1) return;
-
-        var routeSource = VisibleRoutes;
-        if (routeSource.Count == 0) return;
-        var route = selectedRouteIndex >= routeSource.Count ? routeSource.Last() : routeSource[selectedRouteIndex];
+        var route = _selectedRoute;
+        if (route == null || !RouteDB.Routes.Contains(route)) return;
 
         using (ImRaii.Child("Editor", size)) {
             if (ImGuiEx.IconButton(PlayIcon)) {
@@ -343,9 +362,9 @@ public class GatherWindow : Window {
                     if (Exec.SourceRoute == route)
                         Exec.Finish();
                     RouteDB.Routes.Remove(route);
-                    RefreshFilteredRoutes();
-                    selectedRouteIndex = Math.Min(selectedRouteIndex, VisibleRoutes.Count - 1);
+                    _selectedRoute = null;
                     RouteDB.NotifyModified();
+                    return;
                 }
             }
             if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled)) ImGui.SetTooltip(Localization.GetText(LocalizationKeys.Gathering.DeleteRouteHoldCtrl));
@@ -366,7 +385,6 @@ public class GatherWindow : Window {
             DrawMassEditContextMenu(route);
 
             var name = route.Name;
-            var group = route.Group;
 
             ImGuiEx.TextV(Localization.GetText(LocalizationKeys.Gathering.Name));
             ImGui.SameLine();
@@ -397,10 +415,7 @@ public class GatherWindow : Window {
 
             ImGuiEx.TextV(Localization.GetText(LocalizationKeys.Gathering.Group));
             ImGui.SameLine();
-            if (ImGui.InputText("##group", ref group, 256)) {
-                route.Group = group;
-                RouteDB.NotifyModified();
-            }
+            ImGui.TextUnformatted(GroupLabel(GroupKey(route.Group)));
 
             using (ImRaii.Child("waypoints")) {
                 for (var i = 0; i < route.Waypoints.Count; ++i) {
@@ -441,9 +456,6 @@ public class GatherWindow : Window {
             RouteDB.NotifyModified();
         }
         if (ImGui.IsItemHovered()) ImGui.SetTooltip(Localization.GetText(LocalizationKeys.Gathering.SetPositionToCurrent));
-        ImGui.SameLine();
-        if (ImGui.InputFloat3("Position", ref wp.Position))
-            RouteDB.NotifyModified();
 
         if (ImGui.InputFloat(Localization.GetLabel(LocalizationKeys.Gathering.RadiusYalms, "Radius (yalms)"), ref wp.Radius))
             RouteDB.NotifyModified();
@@ -500,14 +512,41 @@ public class GatherWindow : Window {
         }
     }
 
+    private static string GroupLabel(string group) => group.Length == 0
+        ? Localization.GetText(LocalizationKeys.Gathering.Ungrouped) : group;
+
     private void ContextMenuGroup(string group) {
-        var old = group;
-        ImGuiEx.TextV(Localization.GetText(LocalizationKeys.Gathering.Name));
-        ImGui.SameLine();
-        if (ImGui.InputText("##groupname", ref group, 256)) {
-            RouteDB.Routes.Where(r => r.Group == old).ToList().ForEach(r => r.Group = group);
+        ImGui.TextUnformatted(Localization.GetText(LocalizationKeys.Gathering.RenameGroup));
+        var name = group;
+        if (ImGui.InputText("###group-name", ref name, 256, ImGuiInputTextFlags.EnterReturnsTrue)
+            && GroupKey(name) is { Length: > 0 } target && target != group) {
+            foreach (var route in RouteDB.Routes.Where(route => GroupKey(route.Group) == group))
+                route.Group = target;
             RouteDB.NotifyModified();
+            ImGui.CloseCurrentPopup();
         }
+    }
+
+    private void ContextMenuRoute(Route route) {
+        if (!ImGui.BeginMenu(Localization.GetLabel(LocalizationKeys.Gathering.MoveToGroup))) return;
+        var current = GroupKey(route.Group);
+        foreach (var group in GetGroups(RouteDB, true)) {
+            using var groupScope = ImRaii.PushId(group.Length == 0 ? "ungrouped" : "group:" + group);
+            if (ImGui.MenuItem($"{GroupLabel(group)}###move", "", group == current, group != current)) {
+                route.Group = group;
+                RouteDB.NotifyModified();
+            }
+        }
+        ImGui.Separator();
+        ImGui.TextUnformatted(Localization.GetText(LocalizationKeys.Gathering.NewGroup));
+        var name = string.Empty;
+        if (ImGui.InputText("###new-group", ref name, 256, ImGuiInputTextFlags.EnterReturnsTrue)
+            && GroupKey(name) is { Length: > 0 } target && target != current) {
+            route.Group = target;
+            RouteDB.NotifyModified();
+            ImGui.CloseCurrentPopup();
+        }
+        ImGui.EndMenu();
     }
 
     private void ContextMenuWaypoint(Route r, int i) {

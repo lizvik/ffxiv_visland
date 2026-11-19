@@ -86,6 +86,7 @@ public static class LocalizationKeys {
         public const string Main = "Common.Main";
         public const string MammetsNotAvailable = "Common.MammetsNotAvailable";
         public const string Manual = "Common.Manual";
+        public const string Cancel = "Common.Cancel";
         public const string MoveDown = "Common.MoveDown";
         public const string MoveUp = "Common.MoveUp";
         public const string Next = "Common.Next";
@@ -129,6 +130,8 @@ public static class LocalizationKeys {
         public const string MountRoulette = "Gathering.MountRoulette";
         public const string MountDistance = "Gathering.MountDistance";
         public const string CreateANewRoute = "Gathering.CreateANewRoute";
+        public const string CreateRouteNewGroup = "Gathering.CreateRouteNewGroup";
+        public const string CreateRouteGroupName = "Gathering.CreateRouteGroupName";
         public const string DefaultInteractionRadius = "Gathering.DefaultInteractionRadius";
         public const string DefaultWaypointRadius = "Gathering.DefaultWaypointRadius";
         public const string DeleteRouteHoldCtrl = "Gathering.DeleteRouteHoldCtrl";
@@ -141,6 +144,10 @@ public static class LocalizationKeys {
         public const string GatherModeHelp = "Gathering.GatherModeHelp";
         public const string GroundShortcuts = "Gathering.GroundShortcuts";
         public const string GroundShortcutsHelp = "Gathering.GroundShortcutsHelp";
+        public const string MoveToGroup = "Gathering.MoveToGroup";
+        public const string NewGroup = "Gathering.NewGroup";
+        public const string RenameGroup = "Gathering.RenameGroup";
+        public const string Ungrouped = "Gathering.Ungrouped";
         public const string Group = "Gathering.Group";
         public const string ImportRouteFromClipboard = "Gathering.ImportRouteFromClipboard";
         public const string InsertStepAbove = "Gathering.InsertStepAbove";
