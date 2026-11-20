@@ -56,7 +56,7 @@ internal static class IslandModeMenu {
         var index = FindEntry(menu, item.Icon, item.RowId);
         Service.Log.Information($"Rare animal capture tool menu: index={index}, pouch={pouchId}, item={item.RowId}");
         if (index < 0) return false;
-        Callback.Fire(menu, false, 0, index, (int)item.Icon, (int)item.RowId, 0);
+        Callback.Fire(menu, true, 0, index, (int)item.Icon, (int)item.RowId, 0);
         return true;
     }
 }

@@ -73,10 +73,14 @@ internal sealed unsafe class RareAnimalCapture : IDisposable {
         if (live == null && !animal.Definition.Available(Utils.EorzeanHour(), snapshot.Weather)) {
             return Reject(R.UnavailableWindow);
         }
-        if (live == null && animal.Definition.Cave) return Reject(R.CaveNearby);
         if (!Service.Navmesh.IsReady()) return Reject(R.NavmeshRequired);
         Vector3? destination = live?.Position;
-        if (destination == null) {
+        if (destination == null && animal.Definition.CaveApproach is { } caveApproach) {
+            // The cave lies beneath outdoor polygons, so constrain the query to the verified cave floor.
+            destination = Service.Navmesh.QueryMeshNearestPoint(caveApproach, 3, 2);
+            if (!destination.HasValue) return Reject(R.CaveNavigationUnavailable);
+        }
+        else if (destination == null) {
             var map = TerritoryTypeMap();
             if (map == null) return Reject(R.NoFloor);
             var world = RareAnimalLocations.MapToWorld(new(animal.Definition.X, animal.Definition.Y), map.Value);
@@ -94,11 +98,9 @@ internal sealed unsafe class RareAnimalCapture : IDisposable {
         _modeMenuOpened = false;
         _toolMenuOpened = false;
         _toolSwitchAttempts = 0;
-        Approach(destination.Value);
-        if (!ReferenceEquals(Service.RouteExec.CurrentRoute, _route)) {
-            Stop(R.CaptureError);
-            return Reject(R.CaptureError);
-        }
+        _destination = destination.Value;
+        Service.RouteExec.Paused = false;
+        StatusKey = R.SelectingTool;
         Service.Log.Information($"Rare animal capture started: animal={animal.Id}, destination={destination.Value}, liveTarget={live != null}");
         return true;
     }
@@ -116,7 +118,11 @@ internal sealed unsafe class RareAnimalCapture : IDisposable {
         });
         ++_approaches;
         Service.RouteExec.Start(_route, 0, false, false);
-        Service.RouteExec.Paused = false;
+        if (!ReferenceEquals(Service.RouteExec.CurrentRoute, _route)) {
+            Stop(R.CaptureError);
+            Reject(R.CaptureError);
+            return;
+        }
         StatusKey = R.Moving;
     }
 
@@ -153,7 +159,8 @@ internal sealed unsafe class RareAnimalCapture : IDisposable {
             _route = null;
             if (Player.DistanceTo(_destination) > 4) { Stop(R.Cancelled); return; }
         }
-        if (Player.Mounted || _dismount.Active) {
+        var awaitingNavigation = _approaches == 0;
+        if (!awaitingNavigation && (Player.Mounted || _dismount.Active)) {
             var ready = !Service.Navmesh.IsDrainingSimpleMove && !Player.IsCasting && !Player.Mounting && !Player.IsJumping;
             var result = _dismount.Update(now, Player.Mounted, ready, Service.RouteExec.RouteDB.StuckMaxRetries,
                 Player.ExclusiveFlying ? 60000 : 8000);
@@ -161,7 +168,7 @@ internal sealed unsafe class RareAnimalCapture : IDisposable {
             StatusKey = R.Moving;
             return;
         }
-        if (!_readyGate.Ready(Player.Position, now, Player.InclusiveFlying || Player.IsCasting || Player.IsJumping
+        if (!_readyGate.Ready(Player.Position, now, (!awaitingNavigation && Player.InclusiveFlying) || Player.IsCasting || Player.IsJumping
             || Player.Mounting || Player.AnimationLock > 0 || AddonUtils.IsOccupied()) || now < _nextActionAt) return;
         var manager = MJIManager.Instance();
         if (manager == null) { Stop(R.IslandOnly); return; }
@@ -200,6 +207,10 @@ internal sealed unsafe class RareAnimalCapture : IDisposable {
                 Callback.Fire(menu, false, -1);
             _modeMenuOpened = false;
         }
+        if (awaitingNavigation) {
+            Approach(_destination);
+            return;
+        }
         if (!EnsureToolSelected(manager, now)) return;
         var live = Find(_animal, snapshot);
         if (live == null) {
@@ -233,8 +244,6 @@ internal sealed unsafe class RareAnimalCapture : IDisposable {
             if (_toolSwitchAttempts > 0)
                 Service.Log.Information($"Rare animal capture: tool confirmed, selected={selected}, pouch={desired}");
             _toolSwitchAttempts = 0;
-            if (_toolMenuOpened && GenericHelpers.TryGetAddonByName<AtkUnitBase>("ContextIconMenu", out var menu)
-                && GenericHelpers.IsAddonReady(menu)) Callback.Fire(menu, false, -1);
             _toolMenuOpened = false;
             return true;
         }

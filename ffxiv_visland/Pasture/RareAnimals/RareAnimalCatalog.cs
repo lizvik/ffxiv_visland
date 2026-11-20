@@ -16,8 +16,9 @@ namespace visland.Pasture.RareAnimals;
 // Display names, icons and sizes are resolved from the installed game's sheets.
 // MJIAnimals row IDs and icon IDs have different ordering; keep explicit row/name pairs.
 internal sealed record RareAnimalDefinition(uint Id, uint NameId, string EnglishName, float X, float Y,
-    int StartHour = 0, int EndHour = 24, uint Weather = 0, bool Cave = false, bool Flight = false,
-    Vector2? Alternate = null) {
+    int StartHour = 0, int EndHour = 24, uint Weather = 0, bool Flight = false,
+    Vector2? Alternate = null, Vector3? CaveApproach = null) {
+    public bool Cave => CaveApproach.HasValue;
     public bool TimeMatches(int hour) => StartHour <= EndHour
         ? hour >= StartHour && hour < EndHour : hour >= StartHour || hour < EndHour;
     public bool Available(int hour, uint weather) => TimeMatches(hour) && (Weather == 0 || Weather == weather);
@@ -62,12 +63,12 @@ internal static class RareAnimalCatalog {
         new(30, 12313, "griffin", 14.8f, 22.4f, 15, 18, 1, Flight: true),
         new(31, 12314, "tiger of paradise", 14.8f, 13.5f, 18, 21, 2),
         new(32, 12315, "morbol seedling", 19.3f, 19.4f, 3, 6, 3),
-        new(34, 12457, "amethyst spriggan", 23.8f, 18.8f, 21, 24, Cave: true, Alternate: new(28, 16)),
+        new(34, 12457, "amethyst spriggan", 23.8f, 18.8f, 21, 24, Alternate: new(28, 16), CaveApproach: new(288.9f, 75.5f, -284.2f)),
         new(36, 12459, "boar of paradise", 17.0f, 15.8f, Weather: 8),
-        new(37, 12460, "weird spriggan", 24.0f, 18.0f, 0, 3, 4, Cave: true),
+        new(37, 12460, "weird spriggan", 24.0f, 18.0f, 0, 3, 4, CaveApproach: new(295.0f, 75.6f, -319.6f)),
         new(38, 12461, "funguar", 19.2f, 27.4f, 15, 18, 7),
         new(39, 12462, "alkonost", 23.1f, 30.6f, 21, 24, 1),
-        new(43, 12630, "grand doblyn", 24.2f, 21.6f, 3, 6, 2, Cave: true),
+        new(43, 12630, "grand doblyn", 24.2f, 21.6f, 3, 6, 2, CaveApproach: new(314.8f, 53.0f, -134.7f)),
         new(40, 12627, "morbol", 28.8f, 23.8f, 21, 24, 8),
         new(41, 12628, "adamantoise", 32.1f, 12.5f, 12, 15, 4),
         new(42, 12629, "pteranodon", 25.0f, 16.1f, 9, 12, 1, Flight: true),

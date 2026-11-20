@@ -47,7 +47,7 @@ public static class LocalizationKeys {
         public const string PastureSelectionRequired = "RareAnimals.PastureSelectionRequired";
         public const string ToolsMissing = "RareAnimals.ToolsMissing";
         public const string UnavailableWindow = "RareAnimals.UnavailableWindow";
-        public const string CaveNearby = "RareAnimals.CaveNearby";
+        public const string CaveNavigationUnavailable = "RareAnimals.CaveNavigationUnavailable";
         public const string NavmeshRequired = "RareAnimals.NavmeshRequired";
         public const string NoFloor = "RareAnimals.NoFloor";
         public const string Moving = "RareAnimals.Moving";
