@@ -45,7 +45,7 @@ internal static class IslandModeMenu {
         if (index < 0) return false;
         // The callback previously reached Capture (runtime mode 5); only confirmation was wrong.
         // Use the actual menu index and icon, then wait for the HUD icon to confirm the change.
-        Callback.Fire(menu, false, 0, index, (int)mode.Value.Icon, 0, 0);
+        Callback.Fire(menu, true, 0, index, (int)mode.Value.Icon, 0, 0);
         return true;
     }
 

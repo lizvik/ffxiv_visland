@@ -202,16 +202,12 @@ internal sealed unsafe class RareAnimalCapture : IDisposable {
             Service.Log.Information($"Rare animal capture: Capture mode confirmed, currentMode={manager->CurrentMode}");
             _modeSwitchAttempts = 0;
         }
-        if (_modeMenuOpened) {
-            if (GenericHelpers.TryGetAddonByName<AtkUnitBase>("ContextIconMenu", out var menu) && GenericHelpers.IsAddonReady(menu))
-                Callback.Fire(menu, false, -1);
-            _modeMenuOpened = false;
-        }
+        _modeMenuOpened = false;
+        if (!EnsureToolSelected(manager, now)) return;
         if (awaitingNavigation) {
             Approach(_destination);
             return;
         }
-        if (!EnsureToolSelected(manager, now)) return;
         var live = Find(_animal, snapshot);
         if (live == null) {
             if (_lostSince == 0) _lostSince = now;
